@@ -51,7 +51,6 @@ export class Handling {
           scope.set(it.name, initType);
         else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(scope, it.base)[0];
-          log.info(mayTable);
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
             mayTable.setField(it.identifier.name, initType);
@@ -63,7 +62,24 @@ export class Handling {
       return [];
     },
     AssignmentOperatorStatement: (scope, node) => [],
-    CallStatement: (scope, node) => [],
+    CallStatement: (scope, node) => {
+      const expr = node.expression;
+      const base = expr.base;
+      if ('Identifier' === base.type && "___" === base.name) {
+        log.info(`___ found at ${Location.fromNodeStart(base)}`);
+        if ('CallExpression' === expr.type && expr.arguments.length) {
+          log.info(this.handle(scope, expr.arguments[0]))
+        } else if ('StringCallExpression' === expr.type) {
+          if ('StringLiteral' === expr.argument.type)
+            log.info('globals' === expr.argument.value
+              ? scope.getGlobals()
+              : 'locals' === expr.argument.value
+                ? scope.getLocals()
+                : expr.argument.value)
+        } else log.info(scope);
+      }
+      return [];
+    },
     ForNumericStatement: (scope, node) => [],
     ForGenericStatement: (scope, node) => [],
 

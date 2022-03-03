@@ -1,25 +1,32 @@
+import { Documentation } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { Type, TypeNil } from './typing';
+import { Type } from './typing';
 
-type VarInfo = { type: Type/*, range: Range*/ };
+type VarInfo = { type: Type, doc?: Documentation/*, range: Range*/ };
 
 class Scope {
 
-  public variables: Record<string, VarInfo>;
-  private range: Range;
+  private static _lastId = 0;
+  protected _id = ++Scope._lastId;
 
-  constructor(parent: Scope, start: Location) {
-    this.variables = Object.create(parent.variables);
-    this.range = new Range(start, null!);
+  public variables: Record<string, VarInfo>;
+  private range = Range.emptyRange();
+
+  private constructor(public parent?: Scope) {
+    this.variables = Object.create(parent?.variables ?? null);
   }
 
-  public close(end: Location) {
-    this.range.end = end;
+  public open(start: Location) { this.range.start = start; }
+  public close(end: Location) { this.range.end = end; }
+
+  public static makeFrom(parent: Scope) {
+    return new Scope(parent);
   }
 
   public static makeGlobal() {
-    const r = new Scope({ variables: {} } as any, Location.beginning());
+    const r = new Scope();
+    r.open(Location.beginning());
     r.close(Location.ending());
     return r;
   }
@@ -30,16 +37,21 @@ export class Scoping {
 
   private global = Scope.makeGlobal();
   private local = this.global;
-  private stack = [this.global];
+
+  private scopes = [this.global];
 
   private contexts: Record<string, any[]> = {};
 
   public fork(location: Location) {
-    this.stack.push(new Scope(this.local, location));
+    this.local = Scope.makeFrom(this.local);
+    this.local.open(location);
+
+    this.scopes.push(this.local);
   }
 
   public join(location: Location) {
-    this.stack.pop()?.close(location);
+    this.local.close(location);
+    this.local = this.local.parent!;
   }
 
   public pushContext(tag: string, what: any) {
@@ -72,6 +84,24 @@ export class Scoping {
   public get(name: string) {
     log.info(`[local scope]: getting "${name}"`);
     return this.local.variables[name]?.type ?? Type.noType();
+  }
+
+  public getGlobals() {
+    const r: Record<string, VarInfo> = {};
+
+    for (const key in this.global.variables)
+      if (!r[key]) r[key] = this.global.variables[key];
+
+    return r;
+  }
+
+  public getLocals() {
+    const r: Record<string, VarInfo> = {};
+
+    for (const key in this.local.variables)
+      if (!r[key]) r[key] = this.local.variables[key];
+
+    return r;
   }
 
 }

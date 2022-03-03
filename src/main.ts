@@ -1,27 +1,21 @@
-import { parse } from 'pico8parse';
+import { Options, parse } from 'pico8parse';
 import { Handling } from './handling';
 import { CurrentDocument } from './locating';
 import { log } from './logging';
 import { Scoping } from './scoping';
 
-const options = {
+const options: Partial<Options> = {
   comments: false,
   locations: true,
   scope: false,
   ranges: false,
+  encodingMode: 'pseudo-latin1',
 };
 
 function main(args: string[]) {
   const src = `
---a = {}
---a.b = 42
---c = a
-
-z = function(tab) tab.a = 0 return tab end
+z = function(tab) tab.num, tab.str = 0, "" return tab end
 o = z({})
-
---z = function(tab) return tab.blabla.ok end
---o, q = z({ blabla={ok=false}, coucou=42 })
 `;
   CurrentDocument.setCurrent(src);
 

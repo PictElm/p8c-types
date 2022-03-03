@@ -8,7 +8,7 @@ export class CurrentDocument {
   public static range: Range;
 
   public static setCurrent(some: string) {
-    this.uri = "(string source)";
+    this.uri = "[String]";
     this.text = some;
     this.ast = null!;
 
@@ -24,7 +24,7 @@ export class CurrentDocument {
 
 export class Location {
 
-  constructor(
+  public constructor(
     public line: number,
     public col: number,
     public file?: string
@@ -55,10 +55,12 @@ export class Location {
 
 export class Range {
 
-  constructor(
+  public constructor(
       public start: Location,
       public end: Location
   ) { }
+
+  public static emptyRange() { return new Range(null!, null!); }
 
   public static fromNode(node: ast.Node) {
     return new Range(Location.fromNodeStart(node), Location.fromNodeEnd(node));

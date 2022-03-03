@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "mocha",
+    "run": "npm run build && node .",
     "build-w": "tsc -b -w --preserveWatchOutput",
     "test-w": "mocha -w",
     "run-w": "nodemon . --delay 1"
@@ -31,7 +32,7 @@
     "mocha": "^9.2.1",
     "nodemon": "^2.0.15",
     "nyc": "^15.1.0",
-    "ts-node": "^10.5.0",
+    "ts-node": "^10.6.0",
     "typescript": "^4.5.5"
   },
   "dependencies": {
