@@ -1,5 +1,4 @@
-import { readFileSync } from 'fs';
-import { ast, parse } from 'pico8parse';
+import { parse } from 'pico8parse';
 import { Handling } from './handling';
 import { CurrentDocument } from './locating';
 import { log } from './logging';
@@ -13,13 +12,16 @@ const options = {
 };
 
 function main(args: string[]) {
-  const src = //readFileSync("../sample.lua");
-`
+  const src = `
+--a = {}
+--a.b = 42
+--c = a
+
 z = function(tab) tab.a = 0 return tab end
 o = z({})
 
--- z = function(tab) return tab.blabla.ok end
--- o, q = z({ blabla={ok=false}, coucou=42 })
+--z = function(tab) return tab.blabla.ok end
+--o, q = z({ blabla={ok=false}, coucou=42 })
 `;
   CurrentDocument.setCurrent(src);
 

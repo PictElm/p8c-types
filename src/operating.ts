@@ -9,44 +9,43 @@ export class TypeSomeOp<T extends any[] = unknown[]> {
   public represent(to: string): string { throw new Error(`Unhandled operation-on-type: representing "${this}" applied to "${to}"`) }
   public resolve(to: Type): Type[] { throw new Error(`Unhandled operation-on-type: resolving "${this}" applied to "${to}"`) }
 
-
-  public static __add = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __add = class __add extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __sub = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __sub = class __sub extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __mul = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __mul = class __mul extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __div = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __div = class __div extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __mod = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __mod = class __mod extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __pow = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __pow = class __pow extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __concat = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __concat = class __concat extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __unm = class extends TypeSomeOp<[]> {
+  public static __unm = class __unm extends TypeSomeOp<[]> {
   }
 
-  public static __len = class extends TypeSomeOp<[]> {
+  public static __len = class __len extends TypeSomeOp<[]> {
   }
 
-  public static __eq = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __eq = class __eq extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __lt = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __lt = class __lt extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __le = class extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __le = class __le extends TypeSomeOp<[left: Type, right: Type]> {
   }
 
-  public static __index = class extends TypeSomeOp<[key: string | number | Type]> {
+  public static __index = class __index extends TypeSomeOp<[key: string | number | Type]> {
 
     public override represent(to: string): string {
       const key = this.args[0];
@@ -67,20 +66,23 @@ export class TypeSomeOp<T extends any[] = unknown[]> {
       if ('string' === typeof key)
         return to instanceof TypeTable
           ? to.getField(key).resolved()
-          : [Type.noType()];
+          : Type.noType().resolved();
       else if ('number' === typeof key)
         return to instanceof TypeTable
           ? to.getIndex(key).resolved()
-          : [Type.noType()];
-      else throw new Error("Not implemented: indexing by type");
+          : Type.noType().resolved();
+      else throw "not implemented: indexing by type";
     }
 
   }
 
-  public static __newindex = class extends TypeSomeOp<[key: string | number | Type]> {
+  public static __newindex = class __newindex extends TypeSomeOp<[key: string | number | Type, value: Type]> {
+
+
+
   }
 
-  public static __call = class extends TypeSomeOp<[parameters: Type[]]> {
+  public static __call = class __call extends TypeSomeOp<[parameters: Type[]]> {
 
     public override represent(to: string): string {
       return `${to}(${this.args[0].join(", ")})`;
@@ -89,14 +91,14 @@ export class TypeSomeOp<T extends any[] = unknown[]> {
     public override resolve(to: Type): Type[] {
       return to instanceof TypeFunction
           ? to.getReturns(this.args[0]).map(it => it.resolved()[0]) // XXX: tuple gap
-          : [Type.noType()];
+          : Type.noType().resolved();
     }
 
   }
 
-  public static __metatable = class extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __ipairs = class extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __pairs = class extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __tostring = class extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
+  public static __metatable = class __metatable extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
+  public static __ipairs = class __ipairs extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
+  public static __pairs = class __pairs extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
+  public static __tostring = class __tostring extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
 
 }

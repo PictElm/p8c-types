@@ -45,18 +45,18 @@ export class Handling {
       types.push(...this.handle(scope, node.init[node.init.length-1]));
 
       node.variables.forEach((it, k) => {
-        const init = types[k] ?? Type.noType();
+        const initType = types[k] ?? Type.noType();
 
         if ('Identifier' === it.type)
-          scope.set(it.name, init);
+          scope.set(it.name, initType);
         else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(scope, it.base)[0];
           log.info(mayTable);
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
-            mayTable.setField(it.identifier.name, init);
+            mayTable.setField(it.identifier.name, initType);
           else if (mayTable instanceof TypeSome)
-            log.warn("not implemented (missing TypeUnknownOperation)"); // TODO: operation for setField (and maybe more...)
+            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, initType));
         }
       });
 
@@ -138,7 +138,7 @@ export class Handling {
       return [baseType instanceof TypeTable
         ? baseType.getField(node.identifier.name)
         : baseType instanceof TypeSome
-          ? baseType.applied(new TypeSomeOp.__index(node.identifier.name))
+          ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
           : Type.noType()];
     },
     IndexExpression: (scope, node) => [],
@@ -149,7 +149,7 @@ export class Handling {
 
       if ('Identifier' === base.type)
         baseType = scope.get(base.name);
-      else throw "not implemented";
+      else throw "not implemented: CallExpression with complex base";
 
       const parameters = node.arguments
         .slice(0, -1)
