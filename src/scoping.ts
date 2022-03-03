@@ -71,7 +71,7 @@ export class Scoping {
 
   public get(name: string) {
     log.info(`[local scope]: getting "${name}"`);
-    return this.local.variables[name]?.type ?? new TypeNil();
+    return this.local.variables[name]?.type ?? Type.noType();
   }
 
 }

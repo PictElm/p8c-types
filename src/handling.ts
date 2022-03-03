@@ -1,8 +1,9 @@
 import { ast } from 'pico8parse';
 import { Location, Range } from './locating';
 import { log } from './logging';
+import { TypeSomeOp } from './operating';
 import { Scoping } from './scoping';
-import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable, TypeUnknown } from './typing';
+import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable, TypeSome } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (scope: Scoping, node: T) => Type[]
@@ -44,15 +45,17 @@ export class Handling {
       types.push(...this.handle(scope, node.init[node.init.length-1]));
 
       node.variables.forEach((it, k) => {
+        const init = types[k] ?? Type.noType();
+
         if ('Identifier' === it.type)
-          scope.set(it.name, types[k] ?? new TypeNil());
+          scope.set(it.name, init);
         else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(scope, it.base)[0];
           log.info(mayTable);
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
-            mayTable.setField(it.identifier.name, types[k]);
-          else if (mayTable instanceof TypeUnknown)
+            mayTable.setField(it.identifier.name, init);
+          else if (mayTable instanceof TypeSome)
             log.warn("not implemented (missing TypeUnknownOperation)"); // TODO: operation for setField (and maybe more...)
         }
       });
@@ -134,9 +137,9 @@ export class Handling {
 
       return [baseType instanceof TypeTable
         ? baseType.getField(node.identifier.name)
-        : baseType instanceof TypeUnknown
-          ? baseType.applied({ field: node.identifier.name })
-          : new TypeNil()];
+        : baseType instanceof TypeSome
+          ? baseType.applied(new TypeSomeOp.__index(node.identifier.name))
+          : Type.noType()];
     },
     IndexExpression: (scope, node) => [],
     // -> type[]
@@ -155,7 +158,7 @@ export class Handling {
 
       return baseType instanceof TypeFunction
         ? baseType.getReturns(parameters)
-        : [new TypeNil()];
+        : [Type.noType()];
     },
     TableCallExpression: (scope, node) => [],
     StringCallExpression: (scope, node) => [],
