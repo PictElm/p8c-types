@@ -1,0 +1,40 @@
+{
+  "name": "p8c-types",
+  "version": "0.1.0",
+  "description": "typing dev package for pico8code",
+  "main": "build/main.js",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "mocha",
+    "build-w": "tsc -b -w --preserveWatchOutput",
+    "test-w": "mocha -w",
+    "run-w": "nodemon . --delay 1"
+  },
+  "mocha": {
+    "spec": "src/**/*.spec.ts",
+    "require": [
+      "ts-node/register"
+    ],
+    "watch-files": [
+      "src/**/*.spec.ts"
+    ]
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^9.1.0",
+    "@types/node": "^17.0.21",
+    "@types/pico8parse": "^0.4.0",
+    "chai": "^4.3.6",
+    "eslint": "^8.10.0",
+    "mocha": "^9.2.1",
+    "nodemon": "^2.0.15",
+    "nyc": "^15.1.0",
+    "ts-node": "^10.5.0",
+    "typescript": "^4.5.5"
+  },
+  "dependencies": {
+    "pico8parse": "^0.4.0"
+  }
+}
