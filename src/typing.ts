@@ -1,4 +1,4 @@
-import { TypeSomeOp } from "./operating";
+import { TypeSomeOp } from './operating';
 
 export abstract class Type {
 
@@ -35,10 +35,10 @@ function mark(type: Type) {
 }
 
 export class TypeGlobal extends Type {
-  
+
   public constructor(private name: string) { super(); }
-  
-  public override toString() { return `<@${this.name}>`; }
+
+  public override toString() { return `<$${this.name}>`; } // "$" <- ugh ><
   // translates the not-yet-defined global types (only on Identifiers probably)
   public override resolved(): Resolved { throw "not implemented: CurrentDocument.getGlobal(this.name).resolved()"; }
 
@@ -69,6 +69,24 @@ export class TypeString extends Type {
 
   public override toString() { return "string"; }
   public override resolved(): Resolved { return mark(new TypeString()); }
+
+}
+
+export class TypeThread extends Type {
+
+  public constructor() { super(); throw "not implemented: TypeThread"; } // unreachable (?)
+
+  public override toString() { return "thread"; }
+  public override resolved(): Resolved { return mark(new TypeThread()); }
+
+}
+
+export class TypeVararg extends Type {
+
+  public constructor() { super(); throw "not implemented: TypeVararg"; }
+
+  public override toString() { return "..."; }
+  public override resolved(): Resolved { return mark(new TypeVararg()); }
 
 }
 
@@ -162,7 +180,7 @@ export class TypeFunction extends Type {
     const parameters = this.parameters
       .map(([name, type]) => `${name}: ${type}`);
 
-    let returns: string;
+    let returns: string = "";
     if (this.returns.length) {
       const toRevert: TypeSome[] = [];
 
@@ -176,7 +194,7 @@ export class TypeFunction extends Type {
       returns = this.returns.join(", "); // XXX: tuple gap [?]
 
       toRevert.forEach(it => it.revert());
-    } else returns = "nil";
+    }
 
     return `(${parameters}) -> [${returns}]`;
   }
