@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { ast } from 'pico8parse';
 import { Location, Range } from './locating';
 import { log } from './logging';
@@ -13,8 +14,8 @@ export class Handling {
   public static handle<T extends ast.Node>(scope: Scoping, node: T): Type[] | never {
     log.info("handling node of type " + node.type);
     const a = Handling.handlers[node.type] as Handler<T> | undefined;
-    if (a) return a(scope, node);
-    throw new TypeError(`Trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
+    assert(a, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
+    return a(scope, node);
   }
 
   private static handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
@@ -37,7 +38,11 @@ export class Handling {
     WhileStatement: (scope, node) => [],
     DoStatement: (scope, node) => [],
     RepeatStatement: (scope, node) => [],
-    LocalStatement: (scope, node) => [],
+    LocalStatement: (scope, node) => {
+      return this.handlers['AssignmentStatement']!(scope, node as any); // XXX!
+      // diff with simple AssignmentStatement is new names shadow previous
+      // but as it stands, this works out alright (maybe?)
+    },
     AssignmentStatement: (scope, node) => {
       const types = node.init
         .slice(0, -1)
@@ -68,15 +73,18 @@ export class Handling {
       if ('Identifier' === base.type && "___" === base.name) {
         log.info(`___ found at ${Location.fromNodeStart(base)}`);
         if ('CallExpression' === expr.type && expr.arguments.length) {
-          log.info(this.handle(scope, expr.arguments[0]))
+          expr.arguments.forEach(it => log.info(this.handle(scope, it)));
         } else if ('StringCallExpression' === expr.type) {
-          if ('StringLiteral' === expr.argument.type)
+          if ('StringLiteral' === expr.argument.type) {
+            if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
+            if ('exit' === expr.argument.value) process.exit(0);
             log.info('globals' === expr.argument.value
               ? scope.getGlobals()
               : 'locals' === expr.argument.value
                 ? scope.getLocals()
-                : expr.argument.value)
-        } else log.info(scope);
+                : expr.argument.value);
+          }
+        }
       }
       return [];
     },

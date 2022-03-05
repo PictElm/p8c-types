@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+
 import { TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable } from '../src/typing';
 
 describe("represent", () => {
@@ -15,10 +16,24 @@ describe("represent", () => {
 
   it("tables", () => {
     expectString(new TypeTable()).to.equal("{}");
+
+    const a = new TypeTable();
+    a.setField("key", new TypeBoolean())
+    expectString(a).to.equal("{ key: boolean }");
   });
 
   it("functions", () => {
     expectString(new TypeFunction([])).to.equal("() -> []");
+
+    expectString(new TypeFunction(["p"])).to.equal("(p: <p>) -> []");
+
+    const a = new TypeFunction([]);
+    a.setReturns([new TypeBoolean]);
+    expectString(a).to.equal("() -> [boolean]");
+
+    const b = new TypeFunction(["p"]);
+    b.setReturns([b.getParameters()[0][1]]);
+    expectString(b).to.equal("(p: <p>) -> [<p>]");
   });
 
 });

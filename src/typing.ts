@@ -1,5 +1,7 @@
+import assert from 'assert';
 import { TypeSomeOp } from './operating';
 
+export type Resolved = Type & { marked: boolean };
 export abstract class Type {
 
   // type 0 is "no type at all" (does not make sens)
@@ -18,20 +20,15 @@ export abstract class Type {
     public override resolved() { return Type.noType().resolved(); }
   }
 
-}
+  protected static mark(type: Type) {
+    const r = type as Resolved;
 
-export type Resolved = Type & { marked: boolean };
-function mark(type: Type) {
-  const r = type as Resolved;
+    assert(!r.marked, `Type.mark: type was already resolved: ${r._id}`);
 
-  if (r.marked) {
-    let repr: string;
-    try { repr = JSON.stringify(r); } catch { repr = r.constructor.name; }
-    throw new TypeError(`Type was already resolved: ${repr}`);
+    r.marked = true;
+    return r;
   }
-  
-  r.marked = true;
-  return r;
+
 }
 
 export class TypeGlobal extends Type {
@@ -47,28 +44,28 @@ export class TypeGlobal extends Type {
 export class TypeNil extends Type {
 
   public override toString() { return "nil"; }
-  public override resolved() { return mark(new TypeNil()); }
+  public override resolved() { return Type.mark(new TypeNil()); }
 
 }
 
 export class TypeBoolean extends Type {
 
   public override toString() { return "boolean"; }
-  public override resolved(): Resolved { return mark(new TypeBoolean()); }
+  public override resolved(): Resolved { return Type.mark(new TypeBoolean()); }
 
 }
 
 export class TypeNumber extends Type {
 
   public override toString() { return "number"; }
-  public override resolved(): Resolved { return mark(new TypeNumber()); }
+  public override resolved(): Resolved { return Type.mark(new TypeNumber()); }
 
 }
 
 export class TypeString extends Type {
 
   public override toString() { return "string"; }
-  public override resolved(): Resolved { return mark(new TypeString()); }
+  public override resolved(): Resolved { return Type.mark(new TypeString()); }
 
 }
 
@@ -77,7 +74,7 @@ export class TypeThread extends Type {
   public constructor() { super(); throw "not implemented: TypeThread"; } // unreachable (?)
 
   public override toString() { return "thread"; }
-  public override resolved(): Resolved { return mark(new TypeThread()); }
+  public override resolved(): Resolved { return Type.mark(new TypeThread()); }
 
 }
 
@@ -86,7 +83,7 @@ export class TypeVararg extends Type {
   public constructor() { super(); throw "not implemented: TypeVararg"; }
 
   public override toString() { return "..."; }
-  public override resolved(): Resolved { return mark(new TypeVararg()); }
+  public override resolved(): Resolved { return Type.mark(new TypeVararg()); }
 
 }
 
@@ -136,7 +133,7 @@ export class TypeTable extends Type {
       if (this.indices[k])
         r.setIndex(k, this.indices[k].resolved());
 
-    return mark(r);
+    return Type.mark(r);
   }
 
 }
@@ -178,7 +175,8 @@ export class TypeFunction extends Type {
 
   public override toString() {
     const parameters = this.parameters
-      .map(([name, type]) => `${name}: ${type}`);
+      .map(([name, type]) => `${name}: ${type}`)
+      .join(", ");
 
     let returns: string = "";
     if (this.returns.length) {
@@ -205,7 +203,7 @@ export class TypeFunction extends Type {
     for (let k = 0; k < r.parameters.length; k++)
       r.parameters[k][1] = this.parameters[k][1].resolved();
 
-    return mark(r);
+    return Type.mark(r);
   }
 
 }
@@ -235,12 +233,20 @@ export class TypeSome extends Type {
     return r;
   }
 
-  public as(type: Type) { this.acts = type; }
-  public revert() { this.acts = undefined; }
+  public as(type: Type) {
+    assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
+    this.acts = type;
+  }
+  public revert() {
+    assert(this.acts, "TypeSome.revert: not acting as anything");
+    this.acts = undefined;
+  }
 
   public override toString() {
     if (!this.acts) return `<${this.from ?? "?"}>`;
-    if (!this.done) return this.acts.toString();
+    if (!this.done) return this === this.acts
+        ? `<${this.from ?? "?"}>`
+        : this.acts.toString();
 
     const what = this.done;
     const to = this === this.acts
@@ -252,11 +258,13 @@ export class TypeSome extends Type {
 
   public override resolved() {
     if (!this.acts) return Type.noType().resolved();
-    if (!this.done) return mark(this.acts);
+    if (!this.done) return this === this.acts
+        ? Type.mark(this)
+        : this.acts.resolved();
 
     const what = this.done;
     const to = this === this.acts
-      ? mark(this)
+      ? Type.mark(this)
       : this.acts.resolved();
 
     return what.resolve(to);

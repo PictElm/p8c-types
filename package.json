@@ -10,7 +10,7 @@
     "build-w": "tsc -b -w --preserveWatchOutput",
     "test-w": "mocha -w",
     "run-w": "nodemon . --delay 1",
-    "coverage": "nyc mocha",
+    "coverage": "nyc mocha || npm run postcoverage",
     "postcoverage": "node coverage/theme/apply.js"
   },
   "mocha": {
@@ -29,8 +29,7 @@
       "src/**/*.ts"
     ],
     "reporter": [
-      "html",
-      "text-summary"
+      "html"
     ],
     "branches": 100,
     "functions": 100,

@@ -1,3 +1,4 @@
+import assert from "assert";
 import { Resolved, Type, TypeFunction, TypeTable } from "./typing";
 
 export abstract class TypeSomeOp<T extends any[] = unknown[]> {
@@ -10,8 +11,8 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
   public toString() { return this.constructor.name + (this.next ? ` then ${this.next}` : ""); }
 
-  public represent(to: string): string { throw new Error(`Unhandled operation-on-type: representing "${this}" applied to "${to}"`); }
-  public resolve(to: Resolved): Resolved { throw new Error(`Unhandled operation-on-type: resolving "${this}" applied to "${to}"`); }
+  public represent(to: string): string { assert(false, `TypeSomeOp.represent: operation "${this}" applied to "${to}"`); }
+  public resolve(to: Resolved): Resolved { assert(false, `TypeSomeOp.resolve: operation "${this}" applied to "${to}"`); }
 
   protected nextRepresent(to: string) { return this.next?.represent(to) ?? to; }
   protected nextResolve(to: Resolved) { return this.next?.resolve(to) ?? to; }
