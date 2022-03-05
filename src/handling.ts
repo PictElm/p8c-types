@@ -18,7 +18,7 @@ export class Handling {
     return a(scope, node);
   }
 
-  private static handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
+  private static readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
     // -> never
     LabelStatement: (scope, node) => [],
     BreakStatement: (scope, node) => [],
@@ -52,10 +52,13 @@ export class Handling {
       node.variables.forEach((it, k) => {
         const initType = types[k] ?? Type.noType();
 
-        if ('Identifier' === it.type)
+        if ('Identifier' === it.type) {
           scope.set(it.name, initType);
-        else if ('MemberExpression' === it.type) {
+          scope.locate(Range.fromNode(it), it.name, initType);
+        } else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(scope, it.base)[0];
+          scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType);
+
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
             mayTable.setField(it.identifier.name, initType);
@@ -104,19 +107,28 @@ export class Handling {
       }
 
       const type = new TypeFunction(names);
+      const startLocation = Location.fromNodeStart(node);
+      const endLocation = Location.fromNodeEnd(node);
 
-      scope.fork(Location.fromNodeStart(node));
-        type.getParameters().forEach(([name, type]) => scope.set(name, type));
+      scope.fork(startLocation);
+        type.getParameters().forEach(([name, type], k) => {
+          scope.set(name, type);
+          scope.locate(Range.fromNode(node.parameters[k]), name, type);
+        });
 
-        scope.pushContext('function', { type });
+        scope.pushContext(startLocation, 'function', { type });
           node.body.forEach(it => this.handle(scope, it));
-        scope.popContext('function');
-      scope.join(Location.fromNodeEnd(node));
+        scope.popContext(endLocation, 'function');
+      scope.join(endLocation);
 
       return [type];
     },
     // -> type
-    Identifier: (scope, node) => [scope.get(node.name)],
+    Identifier: (scope, node) => {
+      const r = scope.get(node.name);
+      scope.locate(Range.fromNode(node), node.name, r);
+      return [r];
+    },
     StringLiteral: (scope, node) => [new TypeString()],
     NumericLiteral: (scope, node) => [new TypeNumber()],
     BooleanLiteral: (scope, node) => [new TypeBoolean()],
@@ -156,14 +168,18 @@ export class Handling {
     MemberExpression: (scope, node) => {
       const baseType = this.handle(scope, node.base)[0];
 
-      // XXX: if ('.' === node.indexer) assumed for now
-      // baseType may change (right? with removing first param?)
-
-      return [baseType instanceof TypeTable
+      const r = baseType instanceof TypeTable
         ? baseType.getField(node.identifier.name)
         : baseType instanceof TypeSome
           ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
-          : Type.noType()];
+          : Type.noType();
+
+      scope.locate(Range.fromNode(node.identifier), node.identifier.name, r);
+
+      // XXX: if ('.' === node.indexer) assumed for now
+      // baseType may change (right? with removing first param?)
+
+      return [r];
     },
     IndexExpression: (scope, node) => [],
     // -> type[]
@@ -171,9 +187,7 @@ export class Handling {
       const base = node.base;
       let baseType: Type;
 
-      if ('Identifier' === base.type)
-        baseType = scope.get(base.name);
-      else throw "not implemented: CallExpression with complex base";
+      baseType = this.handle(scope, base)[0];
 
       const parameters = node.arguments
         .slice(0, -1)

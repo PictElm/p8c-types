@@ -6,7 +6,7 @@ export abstract class Type {
 
   // type 0 is "no type at all" (does not make sens)
   private static _lastId = 0;
-  protected _id = ++Type._lastId;
+  protected readonly _id = ++Type._lastId;
 
   public abstract toString(): string;
   public abstract resolved(): Resolved;

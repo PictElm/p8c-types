@@ -3,12 +3,14 @@ export class log {
 
   public static level: 'info' | 'warn' | 'err' | 'none' = 'info';
 
-  public static coucou(tag?: number) {
-    log.info("coucou" + (tag ?? ""));
-  }
-
   public static trace() {
     console.trace();
+  }
+
+  public static event(o: unknown) {
+    if (Object(o) !== o) console.log("[EVENT]: " + o);
+    else if (Array.isArray(o) && 1 < o.length) console.table(o);
+    else console.dir(o, { depth: 42 });
   }
 
   public static info(o: unknown) {

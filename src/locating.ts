@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { ast } from 'pico8parse';
 import { log } from './logging';
 
+/** immutable */
 export class Document {
 
   public readonly range: Range;
@@ -35,12 +36,13 @@ export class Document {
 
 }
 
+/** immutable */
 export class Location {
 
   public constructor(
-    /** 0-base */ public line: number,
-    /** 0-base */ public character: number,
-    public file?: string,
+    /** 0-base */ public readonly line: number,
+    /** 0-base */ public readonly character: number,
+    public readonly file?: string,
   ) { }
 
   public static fromNodeStart(node: ast.Node) {
@@ -62,17 +64,20 @@ export class Location {
     return Document.current.range.end;
   }
 
-  public toString(): string {
-    return `${this.file ?? "somewhere"}:${this.line}:${this.character}`;
+  public toString(hideUri?: boolean): string {
+    return hideUri
+      ? `${this.line}:${this.character}`
+      : `${this.file ?? "somewhere"}:${this.line}:${this.character}`;
   }
 
 }
 
+/** immutable */
 export class Range {
 
   public constructor(
-    /** included */ public start: Location,
-    /** excluded */ public end: Location
+    /** included */ public readonly start: Location,
+    /** excluded */ public readonly end: Location
   ) { }
 
   public static emptyRange() { return new Range(null!, null!); }
@@ -81,8 +86,8 @@ export class Range {
     return new Range(Location.fromNodeStart(node), Location.fromNodeEnd(node));
   }
 
-  public toString(): string {
-    return `${this.start} - ${this.end}`;
+  public toString(separator: string = " - ", hideUri: boolean): string {
+    return this.start.toString(hideUri) + separator + this.end.toString(hideUri);
   }
 
 }
