@@ -1,29 +1,20 @@
 import assert from 'assert';
+import { Metadata } from './documenting';
 import { TypeSomeOp } from './operating';
 
 export type Resolved = Type & { marked: boolean };
-export abstract class Type {
 
-  // type 0 is "no type at all" (does not make sens)
-  private static _lastId = 0;
-  protected readonly _id = ++Type._lastId;
+abstract class BaseType { // YYY?
+
+  public constructor (protected readonly outself: Type) { }
 
   public abstract toString(): string;
   public abstract resolved(): Resolved;
 
-  public static noType() { return new TypeNil(); }
-  public static loopType() { return new Type.TypeLoop(); }
-
-  // XXX: very partial support..
-  private static TypeLoop = class TypeLoop extends Type {
-    public override toString() { return "*"; }
-    public override resolved(): Resolved { return Type.mark(new TypeLoop()); }
-  }
-
   protected static mark(type: Type) {
     const r = type as Resolved;
 
-    assert(!r.marked, `Type.mark: type was already resolved: ${r._id}`);
+    assert(!r.marked, `BaseType.mark: type was already resolved: ${r}`);
 
     r.marked = true;
     return r;
@@ -31,63 +22,99 @@ export abstract class Type {
 
 }
 
-export class TypeGlobal extends Type {
+// help :'
+type Ctors
+  = typeof TypeNil
+  | typeof TypeBoolean
+  | typeof TypeNumber
+  | typeof TypeString
+  | typeof TypeThread
+  | typeof TypeVararg
+  | typeof TypeTable
+  | typeof TypeFunction
+  | typeof TypeSome
+  ;
 
-  public constructor(private name: string) { super(); }
+export class Type {
 
-  public override toString() { return `<$${this.name}>`; } // "$" <- ugh ><
-  // translates the not-yet-defined global types (only on Identifiers probably)
-  public override resolved(): Resolved { throw "not implemented: CurrentDocument.getGlobal(this.name).resolved()"; }
+  private static _lastId = 0;
+  protected readonly _id = ++Type._lastId;
+
+  private _itself: BaseType = null!;
+  public get itself() { return this._itself; }
+
+  private _metadata?: Metadata;
+  public set metadata(value) { this._metadata = value; }
+  public get metadata() { return this._metadata; }
+
+  private constructor() { }
+
+  public as<Z extends Ctors>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
+  public mutate<T extends BaseType>(into: T) { return this._itself = into; }
+
+  public toString() { return `_id${this._id}`; }
+
+  public static Nil() { const r = new Type(); r.mutate(new TypeNil(r)); return r; }
+  public static Boolean() { const r = new Type(); r.mutate(new TypeBoolean(r)); return r; }
+  public static Number() { const r = new Type(); r.mutate(new TypeNumber(r)); return r; }
+  public static String() { const r = new Type(); r.mutate(new TypeString(r)); return r; }
+  public static Thread() { const r = new Type(); r.mutate(new TypeThread(r)); return r; }
+  public static Vararg() { const r = new Type(); r.mutate(new TypeVararg(r)); return r; }
+  public static Table() { const r = new Type(); r.mutate(new TypeTable(r)); return r; }
+  public static Function(names: string[]) { const r = new Type(); r.mutate(new TypeFunction(r, names)); return r; }
+  public static Some(from?: string) { const r = new Type(); r.mutate(new TypeSome(r, from)); return r; }
+
+  public static noType() { return Type.Nil(); } // YYY?
 
 }
 
-export class TypeNil extends Type {
+export class TypeNil extends BaseType {
 
   public override toString() { return "nil"; }
-  public override resolved(): Resolved { return Type.mark(new TypeNil()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.Nil()); }
 
 }
 
-export class TypeBoolean extends Type {
+export class TypeBoolean extends BaseType {
 
   public override toString() { return "boolean"; }
-  public override resolved(): Resolved { return Type.mark(new TypeBoolean()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.Boolean()); }
 
 }
 
-export class TypeNumber extends Type {
+export class TypeNumber extends BaseType {
 
   public override toString() { return "number"; }
-  public override resolved(): Resolved { return Type.mark(new TypeNumber()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.Number()); }
 
 }
 
-export class TypeString extends Type {
+export class TypeString extends BaseType {
 
   public override toString() { return "string"; }
-  public override resolved(): Resolved { return Type.mark(new TypeString()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.String()); }
 
 }
 
-export class TypeThread extends Type {
+export class TypeThread extends BaseType {
 
-  public constructor() { super(); throw "not implemented: TypeThread"; } // unreachable (?)
+  public constructor(outself: Type) { super(outself); throw "not implemented: TypeThread"; }
 
   public override toString() { return "thread"; }
-  public override resolved(): Resolved { return Type.mark(new TypeThread()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.Thread()); }
 
 }
 
-export class TypeVararg extends Type {
+export class TypeVararg extends BaseType {
 
-  public constructor() { super(); throw "not implemented: TypeVararg"; }
+  public constructor(outself: Type) { super(outself); throw "not implemented: TypeVararg"; }
 
   public override toString() { return "..."; }
-  public override resolved(): Resolved { return Type.mark(new TypeVararg()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.Vararg()); }
 
 }
 
-export class TypeTable extends Type {
+export class TypeTable extends BaseType {
 
   private fields: Record<string, Type> = {};
   private indices: Array<Type> = [];
@@ -112,40 +139,41 @@ export class TypeTable extends Type {
     const r: string[] = [];
 
     for (const key in this.fields)
-      r.push(`${key}: ${this.fields[key]}`);
+      r.push(`${key}: ${this.fields[key].itself}`);
 
     // TODO: should deal with table-as-list better
     for (let k = 0; k < this.indices.length; k++)
       if (this.indices[k])
-        r.push(`[${k}]: ${this.indices[k]}`);
+        r.push(`[${k}]: ${this.indices[k].itself}`);
 
     return r.length ? `{ ${r.join(", ")} }` : "{}";
   }
 
   public override resolved(): Resolved {
-    const r = new TypeTable();
+    const r = Type.Table();
+    const tableType = r.as(TypeTable)!;
 
     for (const key in this.fields)
-      r.setField(key, this.fields[key].resolved());
+      tableType.setField(key, this.fields[key].itself.resolved());
 
     // TODO: should deal with table-as-list better
     for (let k = 0; k < this.indices.length; k++)
       if (this.indices[k])
-        r.setIndex(k, this.indices[k].resolved());
+        tableType.setIndex(k, this.indices[k].itself.resolved());
 
-    return Type.mark(r);
+    return BaseType.mark(r);
   }
 
 }
 
-export class TypeFunction extends Type {
+export class TypeFunction extends BaseType {
 
   private returns: Type[] = [];
   private parameters: [name: string, type: Type][];
 
-  public constructor(names: string[]) {
-    super();
-    this.parameters = names.map(it => [it, new TypeSome(it)]);
+  public constructor(outself: Type, names: string[]) {
+    super(outself);
+    this.parameters = names.map(it => [it, Type.Some(it)]);
   }
 
   public getParameters() {
@@ -160,13 +188,13 @@ export class TypeFunction extends Type {
     const toRevert: TypeSome[] = [];
 
     this.parameters.forEach(([_, type], k) => {
-      if (type instanceof TypeSome) {
-        toRevert.push(type);
-        type.as(applying[k]);
+      if (type.itself instanceof TypeSome) {
+        toRevert.push(type.itself);
+        type.itself.actsAs(applying[k]);
       }
     });
 
-    const r = this.returns.map(it => it.resolved()); // XXX: tuple gap
+    const r = this.returns.map(it => it.itself.resolved()); // XXX: tuple gap
 
     toRevert.forEach(it => it.revert());
 
@@ -175,21 +203,23 @@ export class TypeFunction extends Type {
 
   public override toString() {
     const parameters = this.parameters
-      .map(([name, type]) => `${name}: ${type}`)
+      .map(([name, type]) => `${name}: ${type.itself}`)
       .join(", ");
 
     let returns: string = "";
     if (this.returns.length) {
       const toRevert: TypeSome[] = [];
 
-      this.parameters.forEach(([_, type], k) => {
-        if (type instanceof TypeSome) {
-          toRevert.push(type);
-          type.as(type);
+      this.parameters.forEach(([_, type]) => {
+        if (type.itself instanceof TypeSome) {
+          toRevert.push(type.itself);
+          type.itself.actsAs(type);
         }
       });
 
-      returns = this.returns.join(", "); // XXX: tuple gap [?]
+      returns = this.returns
+        .map(it => `${it.itself}`)
+        .join(", "); // XXX: tuple gap [?]
 
       toRevert.forEach(it => it.revert());
     }
@@ -198,30 +228,31 @@ export class TypeFunction extends Type {
   }
 
   public override resolved(): Resolved {
-    const r = new TypeFunction(this.parameters.map(it => it[0]));
+    const r = Type.Function(this.parameters.map(it => it[0]));
+    const functionType = r.as(TypeFunction)!;
 
     const returns = this.returns.map(ret => {
       const k = this.parameters.findIndex(par => par[1] === ret);
-      if (-1 < k) return r.parameters[k][1]; // ret itself _is_ a param of this
+      if (-1 < k) return functionType.parameters[k][1]; // ret itself _is_ a param of this
 
       throw "hey"; // XXX/TODO/FIXME/...: find a way to trigger that
       // summary:
       //  if a this param somewhere in the type description of ret,
       //  it needs to be replaced with the corresponding r param
     });
-    r.setReturns(returns);
+    functionType.setReturns(returns);
 
-    return Type.mark(r);
+    return BaseType.mark(r);
   }
 
 }
 
-export class TypeSome extends Type {
+export class TypeSome extends BaseType {
 
   private acts?: Type;
   private done?: TypeSomeOp;
 
-  public constructor(private from?: string) { super(); }
+  public constructor(outself: Type, private from?: string) { super(outself); }
 
   // in-place applied (the type is modified)
   public setApplied<T extends any[]>(operation: TypeSomeOp<T>) {
@@ -230,18 +261,19 @@ export class TypeSome extends Type {
   }
 
   // not in-place applied (a new type is created)
-  public getApplied<T extends any[]>(operation: TypeSomeOp<T>): TypeSome {
+  public getApplied<T extends any[]>(operation: TypeSomeOp<T>) {
     //const repr = this.from && operation.represent(this.from);
-    const r = new TypeSome();
+    const r = Type.Some();
+    const someType = r.as(TypeSome)!;
 
     // "acts as `this` with `operation` done on it"
-    r.acts = this;
-    r.done = operation;
+    someType.acts = this.outself;
+    someType.done = operation;
 
     return r;
   }
 
-  public as(type: Type) {
+  public actsAs(type: Type) {
     assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
     this.acts = type;
   }
@@ -252,28 +284,28 @@ export class TypeSome extends Type {
 
   public override toString() {
     if (!this.acts) return `<${this.from ?? "?"}>`;
-    if (!this.done) return this === this.acts
+    if (!this.done) return this === this.acts.itself
         ? `<${this.from ?? "?"}>`
-        : this.acts.toString();
+        : `${this.acts.itself}`;
 
     const what = this.done;
-    const to = this === this.acts
+    const to = this === this.acts.itself
       ? `<${this.from ?? "?"}>`
-      : this.acts.toString();
+      : `${this.acts.itself}`;
 
     return what.represent(to);
   }
 
   public override resolved() {
-    if (!this.acts) return Type.noType().resolved();
-    if (!this.done) return this === this.acts
-        ? Type.mark(this)
-        : this.acts.resolved();
+    if (!this.acts) return Type.noType().itself.resolved();
+    if (!this.done) return this === this.acts.itself
+        ? BaseType.mark(this.outself)
+        : this.acts.itself.resolved();
 
     const what = this.done;
-    const to = this === this.acts
-      ? Type.mark(this)
-      : this.acts.resolved();
+    const to = this === this.acts.itself
+      ? BaseType.mark(this.outself)
+      : this.acts.itself.resolved();
 
     return what.resolve(to);
   }

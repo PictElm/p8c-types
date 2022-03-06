@@ -1,4 +1,4 @@
-import { Type, TypeString } from './typing';
+import { Type } from './typing';
 
 /**
  * syntaxes: (TODO: proper grammar?)
@@ -8,6 +8,6 @@ import { Type, TypeString } from './typing';
  * - `false`, `true`, `42`, `'sleep'`, `<$setmetatable>`
  */
 export function parseType(source: string): Type {
-  if ('string' === source) return new TypeString();
+  if ('string' === source) return Type.String();
   return null!;
 }

@@ -1,4 +1,5 @@
-import { ast, Options, parse } from 'pico8parse';
+import { Options, parse } from 'pico8parse';
+import { Documenting } from './documenting';
 import { Handling } from './handling';
 import { Document } from './locating';
 import { log } from './logging';
@@ -21,33 +22,30 @@ o = z(z)
 o = z(o)
 o = o(z)
 o = o(o)
-
+-- blabla
 --z = function(tab) tab.num, tab.str = 0, "" return tab end
+-- coucou
 --o = z({})
 `;
   Document.loadString(src);
 
-  const super_comment = ast.comment;
-  ast.comment = (value, raw, rawInterrupted) => {
-    const r = super_comment(value, raw, rawInterrupted);
-    log.event("new comment somewhere:");
-    log.event(r);
-    return r;
-  };
-
-  const parsed = parse(src, options);
   const scoping = new Scoping();
+  const documenting = new Documenting();
+  const handling = new Handling(scoping, documenting);
 
   scoping
     //.on('fork', loc => log.event(`new scope from: ${loc}`))
     //.on('join', loc => log.event(`end of scope @: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
-    .on('locate', (range, name, type, why) => log.event(`${range.start}: {${["?", "t", "r", "w"][why]}} ${name}: ${type}`))
+    .on('locate', (range, name, type, why) => log.event(`${range.start}: {${["?", "t", "r", "w"][why]}} ${name}: ${type.itself}`))
     ;
 
-  log.info(parsed);
-  Handling.handle(scoping, parsed);
+  handling
+    .on('handle', node => log.info("handling node of type " + node.type))
+    ;
+
+  handling.handle(parse(src, options));
 }
 
 main(process.argv.slice(2));

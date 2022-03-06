@@ -1,4 +1,5 @@
 import { ast } from 'pico8parse';
+import { TypedEmitter } from 'tiny-typed-emitter';
 import { Type } from './typing';
 
 /**
@@ -7,19 +8,25 @@ import { Type } from './typing';
  * - `@label label`
  * - `@see label | name`
  * - `@alias some: type`
- * - (at this rate, why not `@return`, `@param` and so on?)
+ * - something like `@thread` or `@coroutine` to type the params
+ * - (at this rate, why not `@return`, `@param` and `@property`)
  */
-export class Documentation {
+export class Metadata {
 
   private source: ast.Comment = null!;
-  private initialName: string = null!;
 
-  private definedTypes: Record<string, Type> = null!;
+  private description?: string;
+  private typeOverride?: string;
 
 }
 
-export class Documenting {
+interface DocumentingEvents {
+}
 
-  private entries: Array<Documentation> = null!;
+export class Documenting extends TypedEmitter<DocumentingEvents> {
+
+  private typeAlias: Record<string, Metadata> = {};
+
+  private entries: Array<Metadata> = null!;
 
 }

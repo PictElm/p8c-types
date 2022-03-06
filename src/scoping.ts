@@ -1,11 +1,11 @@
 import assert from 'assert';
 import { TypedEmitter } from 'tiny-typed-emitter';
-import { Documentation } from './documenting';
+import { Metadata } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { Type, TypeFunction, TypeTable } from './typing';
+import { Type } from './typing';
 
-type VarInfo = { type: Type, doc?: Documentation/*, range: Range*/ };
+type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
 
 class Scope {
 
@@ -38,14 +38,15 @@ class Scope {
 namespace Context {
 
   abstract class Base<Tag extends string> {
-    protected constructor(public readonly tag: Tag) {}
+    protected constructor(public readonly tag: Tag) { }
   }
 
   export class Function extends Base<'Function'> {
-    public constructor(public readonly theFunction: TypeFunction) { super('Function'); }
+    // Type and not TypeFunction because it can be mutated into a TypeThread
+    public constructor(public readonly theFunction: Type) { super('Function'); }
   }
   export class Table extends Base<'Table'> {
-    public constructor(public readonly theTable: TypeTable) { super('Table'); }
+    public constructor(public readonly theTable: Type) { super('Table'); }
   }
 
 }

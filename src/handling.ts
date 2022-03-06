@@ -1,63 +1,74 @@
 import assert from 'assert';
 import { ast } from 'pico8parse';
+import { TypedEmitter } from 'tiny-typed-emitter';
+import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
 import { TypeSomeOp } from './operating';
 import { LocateReason, Scoping } from './scoping';
-import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable, TypeSome } from './typing';
+import { Type, TypeFunction, TypeTable, TypeSome } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
-type Handler<T> = (scope: Scoping, node: T) => Type[]
+type Handler<T> = (node: T) => Type[]
 
-export class Handling {
+interface HandlingEvents {
+  'handle': (node: ast.Node) => void;
+}
 
-  public static handle<T extends ast.Node>(scope: Scoping, node: T): Type[] | never {
-    log.info("handling node of type " + node.type);
-    const h = Handling.handlers[node.type] as Handler<T> | undefined;
+export class Handling extends TypedEmitter<HandlingEvents> {
+
+  public constructor(
+    private readonly scope: Scoping,
+    private readonly doc: Documenting
+  ) { super(); }
+
+  public handle<T extends ast.Node>(node: T): Type[] | never {
+    this.emit('handle', node);
+    const h = this.handlers[node.type] as Handler<T> | undefined;
     assert(h, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
-    return h(scope, node);
+    return h(node);
   }
 
-  private static readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
+  private readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
     // -> never
-    LabelStatement: (scope, node) => [],
-    BreakStatement: (scope, node) => [],
-    GotoStatement: (scope, node) => [],
-    ReturnStatement: (scope, node) => {
+    LabelStatement: node => [],
+    BreakStatement: node => [],
+    GotoStatement: node => [],
+    ReturnStatement: node => {
       const types = node.arguments
         .slice(0, -1)
-        .map(it => this.handle(scope, it)[0]);
-      types.push(...this.handle(scope, node.arguments[node.arguments.length-1]));
+        .map(it => this.handle(it)[0]);
+      types.push(...this.handle(node.arguments[node.arguments.length-1]));
 
-      const theFunction = scope.findContext('Function').theFunction;
-      theFunction.setReturns(types);
+      const theFunction = this.scope.findContext('Function').theFunction;
+      theFunction.as(TypeFunction)?.setReturns(types);
 
       return [];
     },
-    IfStatement: (scope, node) => [],
-    WhileStatement: (scope, node) => [],
-    DoStatement: (scope, node) => [],
-    RepeatStatement: (scope, node) => [],
-    LocalStatement: (scope, node) => {
-      return this.handlers['AssignmentStatement']!(scope, node as any); // XXX!
+    IfStatement: node => [],
+    WhileStatement: node => [],
+    DoStatement: node => [],
+    RepeatStatement: node => [],
+    LocalStatement: node => {
+      return this.handlers['AssignmentStatement']!(node as any); // XXX!
       // diff with simple AssignmentStatement is new names shadow previous
       // but as it stands, this works out alright (maybe?)
     },
-    AssignmentStatement: (scope, node) => {
+    AssignmentStatement: node => {
       const types = node.init
         .slice(0, -1)
-        .map(it => this.handle(scope, it)[0]);
-      types.push(...this.handle(scope, node.init[node.init.length-1]));
+        .map(it => this.handle(it)[0]);
+      types.push(...this.handle(node.init[node.init.length-1]));
 
       node.variables.forEach((it, k) => {
         const initType = types[k] ?? Type.noType();
 
         if ('Identifier' === it.type) {
-          scope.set(it.name, initType);
-          scope.locate(Range.fromNode(it), it.name, initType, LocateReason.Write);
+          this.scope.set(it.name, initType);
+          this.scope.locate(Range.fromNode(it), it.name, initType, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
-          const mayTable = this.handle(scope, it.base)[0];
-          scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType, LocateReason.Write);
+          const mayTable = this.handle(it.base)[0].itself;
+          this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
@@ -69,36 +80,36 @@ export class Handling {
 
       return [];
     },
-    AssignmentOperatorStatement: (scope, node) => [],
-    CallStatement: (scope, node) => {
+    AssignmentOperatorStatement: node => [],
+    CallStatement: node => {
       const expr = node.expression;
       const base = expr.base;
       if ('Identifier' === base.type && "___" === base.name) {
         log.info(`___ found at ${Location.fromNodeStart(base)}`);
         if ('CallExpression' === expr.type && expr.arguments.length) {
-          expr.arguments.forEach(it => log.info(this.handle(scope, it)));
+          expr.arguments.forEach(it => log.info(this.handle(it)));
         } else if ('StringCallExpression' === expr.type) {
           if ('StringLiteral' === expr.argument.type) {
             if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
             if ('exit' === expr.argument.value) process.exit(0);
             log.info('globals' === expr.argument.value
-              ? scope.getGlobals()
+              ? this.scope.getGlobals()
               : 'locals' === expr.argument.value
-                ? scope.getLocals()
+                ? this.scope.getLocals()
                 : expr.argument.value);
           }
         }
       }
 
-      this.handle(scope, node.expression);
+      this.handle(node.expression);
 
       return [];
     },
-    ForNumericStatement: (scope, node) => [],
-    ForGenericStatement: (scope, node) => [],
+    ForNumericStatement: node => [],
+    ForGenericStatement: node => [],
 
     // -> type | never
-    FunctionDeclaration: (scope, node) => {
+    FunctionDeclaration: node => {
       const names: string[] = [];
       let isVararg = false;
 
@@ -109,38 +120,40 @@ export class Handling {
         else isVararg = true;
       }
 
-      const type = new TypeFunction(names);
+      const type = Type.Function(names);
+      const functionType = type.as(TypeFunction)!;
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
-      scope.fork(startLocation);
-        type.getParameters().forEach(([name, type], k) => {
-          scope.set(name, type);
-          scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
+      this.scope.fork(startLocation);
+        functionType.getParameters().forEach(([name, type], k) => {
+          this.scope.set(name, type);
+          this.scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
         });
 
-        scope.pushContext(startLocation, 'Function', type);
-          node.body.forEach(it => this.handle(scope, it));
-        scope.popContext(endLocation, 'Function');
-      scope.join(endLocation);
+        this.scope.pushContext(startLocation, 'Function', type);
+          node.body.forEach(it => this.handle(it));
+        this.scope.popContext(endLocation, 'Function');
+      this.scope.join(endLocation);
 
       return [type];
     },
     // -> type
-    Identifier: (scope, node) => {
-      const r = scope.get(node.name);
-      scope.locate(Range.fromNode(node), node.name, r, LocateReason.Read);
+    Identifier: node => {
+      const r = this.scope.get(node.name);
+      this.scope.locate(Range.fromNode(node), node.name, r, LocateReason.Read);
       return [r];
     },
-    StringLiteral: (scope, node) => [new TypeString()],
-    NumericLiteral: (scope, node) => [new TypeNumber()],
-    BooleanLiteral: (scope, node) => [new TypeBoolean()],
-    NilLiteral: (scope, node) => [new TypeNil()],
+    StringLiteral: node => [Type.String()],
+    NumericLiteral: node => [Type.Number()],
+    BooleanLiteral: node => [Type.Boolean()],
+    NilLiteral: node => [Type.Nil()],
     // -> type[]
-    VarargLiteral: (scope, node) => [],
+    VarargLiteral: node => [],
     // -> type
-    TableConstructorExpression: (scope, node) => {
-      const type = new TypeTable();
+    TableConstructorExpression: node => {
+      const type = Type.Table();
+      const tableType = type.as(TypeTable)!;
       let autoIndex = 0;
 
       node.fields.forEach((it, k) => {
@@ -150,14 +163,14 @@ export class Handling {
           } break;
 
           case 'TableKeyString': {
-            type.setField(it.key.name, this.handle(scope, it.value)[0]);
+            tableType.setField(it.key.name, this.handle(it.value)[0]);
           } break;
 
           case 'TableValue': {
-            const types = this.handle(scope, it.value);
+            const types = this.handle(it.value);
             if (node.fields.length-1 === k)
-              types.forEach(niw => type.setIndex(++autoIndex, niw));
-            else type.setIndex(++autoIndex, types[0]);
+              types.forEach(niw => tableType.setIndex(++autoIndex, niw));
+            else tableType.setIndex(++autoIndex, types[0]);
           } break;
         }
       });
@@ -165,11 +178,11 @@ export class Handling {
       return [type];
     },
     // -> type
-    BinaryExpression: (scope, node) => [],
-    LogicalExpression: (scope, node) => [],
-    UnaryExpression: (scope, node) => [],
-    MemberExpression: (scope, node) => {
-      const baseType = this.handle(scope, node.base)[0];
+    BinaryExpression: node => [],
+    LogicalExpression: node => [],
+    UnaryExpression: node => [],
+    MemberExpression: node => {
+      const baseType = this.handle(node.base)[0].itself;
 
       const r = baseType instanceof TypeTable
         ? baseType.getField(node.identifier.name)
@@ -177,25 +190,23 @@ export class Handling {
           ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
           : Type.noType();
 
-      scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
+      this.scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
 
       // XXX: if ('.' === node.indexer) assumed for now
       // baseType may change (right? with removing first param?)
 
       return [r];
     },
-    IndexExpression: (scope, node) => [],
+    IndexExpression: node => [],
     // -> type[]
-    CallExpression: (scope, node) => {
+    CallExpression: node => {
       const base = node.base;
-      let baseType: Type;
-
-      baseType = this.handle(scope, base)[0];
+      const baseType = this.handle(base)[0].itself;
 
       const parameters = node.arguments
         .slice(0, -1)
-        .map(it => this.handle(scope, it)[0]);
-      parameters.push(...this.handle(scope, node.arguments[node.arguments.length-1]));
+        .map(it => this.handle(it)[0]);
+      parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
 
       return baseType instanceof TypeFunction
         ? baseType.getReturns(parameters)
@@ -203,21 +214,25 @@ export class Handling {
           ? [baseType.getApplied(new TypeSomeOp.__call(parameters))] // XXX: tuple gap
           : [Type.noType()];
     },
-    TableCallExpression: (scope, node) => [],
-    StringCallExpression: (scope, node) => [],
+    TableCallExpression: node => [],
+    StringCallExpression: node => [],
 
     // -> never
-    IfClause: (scope, node) => [],
-    ElseifClause: (scope, node) => [],
-    ElseClause: (scope, node) => [],
-    Chunk: (scope, node) => {
-      node.body.forEach(it => this.handle(scope, it));
+    IfClause: node => [],
+    ElseifClause: node => [],
+    ElseClause: node => [],
+    Chunk: node => {
+      node.comments?.forEach(it => this.handle(it));
+      node.body.forEach(it => this.handle(it));
       return [];
     },
-    TableKey: (scope, node) => [],
-    TableKeyString: (scope, node) => [],
-    TableValue: (scope, node) => [],
-    Comment: (scope, node) => [],
+    TableKey: node => [],
+    TableKeyString: node => [],
+    TableValue: node => [],
+    Comment: node => {
+      log.info(node);
+      return [];
+    },
   };
 
 }

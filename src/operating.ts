@@ -1,5 +1,5 @@
-import assert from "assert";
-import { Resolved, Type, TypeFunction, TypeTable } from "./typing";
+import assert from 'assert';
+import { Resolved, Type, TypeFunction, TypeTable } from './typing';
 
 export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
@@ -63,11 +63,11 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
           ? `${to}.${key}` // XXX: again, assumes '.'
           : 'number' === typeof key
             ? `${to}[${key}]`
-            : `${to}[${key instanceof TypeFunction
+            : `${to}[${key.itself instanceof TypeFunction
                 ? "function"
-                : key instanceof TypeTable
+                : key.itself instanceof TypeTable
                   ? "table"
-                  : key}]`
+                  : key.itself}]`
       );
     }
 
@@ -76,13 +76,13 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
       let r: Resolved;
 
       if ('string' === typeof key)
-        r = to instanceof TypeTable
-          ? to.getField(key).resolved()
-          : Type.noType().resolved();
+        r = to.itself instanceof TypeTable
+          ? to.itself.getField(key).itself.resolved()
+          : Type.noType().itself.resolved();
       else if ('number' === typeof key)
-        r = to instanceof TypeTable
-          ? to.getIndex(key).resolved()
-          : Type.noType().resolved();
+        r = to.itself instanceof TypeTable
+          ? to.itself.getIndex(key).itself.resolved()
+          : Type.noType().itself.resolved();
       else throw "not implemented: __index by type";
 
       return this.nextResolve(r);
@@ -97,14 +97,14 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
       return this.nextRepresent(
         'string' === typeof key
-          ? `${to}(.${key}: ${value})` // XXX: again, assumes '.'
+          ? `${to}(.${key}: ${value.itself})` // XXX: again, assumes '.'
           : 'number' === typeof key
-            ? `${to}([${key}]: ${value})`
-            : `${to}([${key instanceof TypeFunction
+            ? `${to}([${key}]: ${value.itself})`
+            : `${to}([${key.itself instanceof TypeFunction
                 ? "function"
-                : key instanceof TypeTable
+                : key.itself instanceof TypeTable
                   ? "table"
-                  : key}]: ${value})`
+                  : key.itself}]: ${value.itself})`
       );
     }
 
@@ -112,11 +112,11 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
       const [key, value] = this.args;
 
       if ('string' === typeof key) {
-        if (to instanceof TypeTable)
-          to.setField(key, value);
+        if (to.itself instanceof TypeTable)
+          to.itself.setField(key, value);
       } else if ('number' === typeof key) {
-        if (to instanceof TypeTable)
-          to.setIndex(key, value);
+        if (to.itself instanceof TypeTable)
+          to.itself.setIndex(key, value);
       } else throw "not implemented: __newindex by type";
 
       return this.nextResolve(to);
@@ -134,17 +134,17 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
     public override resolve(to: Resolved) {
       const [parameters] = this.args;
       return this.nextResolve(
-        to instanceof TypeFunction
-          ? to.getReturns(parameters).map(it => it.resolved())[0] // XXX: tuple gap
-          : Type.noType().resolved()
+        to.itself instanceof TypeFunction
+          ? to.itself.getReturns(parameters)[0].itself.resolved() // XXX: tuple gap
+          : Type.noType().itself.resolved()
       );
     }
 
   }
 
-  public static __metatable = class __metatable extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __ipairs = class __ipairs extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __pairs = class __pairs extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
-  public static __tostring = class __tostring extends TypeSomeOp<unknown[]> {} // YYY: not implemented yet
+  public static __metatable = class __metatable extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
+  public static __ipairs = class __ipairs extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
+  public static __pairs = class __pairs extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
+  public static __tostring = class __tostring extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
 
 }
