@@ -15,9 +15,9 @@ export abstract class Type {
   public static loopType() { return new Type.TypeLoop(); }
 
   // XXX: very partial support..
-  private static TypeLoop = class extends Type {
+  private static TypeLoop = class TypeLoop extends Type {
     public override toString() { return "*"; }
-    public override resolved() { return Type.noType().resolved(); }
+    public override resolved(): Resolved { return Type.mark(new TypeLoop()); }
   }
 
   protected static mark(type: Type) {
@@ -44,7 +44,7 @@ export class TypeGlobal extends Type {
 export class TypeNil extends Type {
 
   public override toString() { return "nil"; }
-  public override resolved() { return Type.mark(new TypeNil()); }
+  public override resolved(): Resolved { return Type.mark(new TypeNil()); }
 
 }
 
@@ -200,8 +200,16 @@ export class TypeFunction extends Type {
   public override resolved(): Resolved {
     const r = new TypeFunction(this.parameters.map(it => it[0]));
 
-    for (let k = 0; k < r.parameters.length; k++)
-      r.parameters[k][1] = this.parameters[k][1].resolved();
+    const returns = this.returns.map(ret => {
+      const k = this.parameters.findIndex(par => par[1] === ret);
+      if (-1 < k) return r.parameters[k][1]; // ret itself _is_ a param of this
+
+      throw "hey"; // XXX/TODO/FIXME/...: find a way to trigger that
+      // summary:
+      //  if a this param somewhere in the type description of ret,
+      //  it needs to be replaced with the corresponding r param
+    });
+    r.setReturns(returns);
 
     return Type.mark(r);
   }

@@ -1,9 +1,9 @@
-import { assert } from 'console';
+import assert from 'assert';
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Documentation } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { Type } from './typing';
+import { Type, TypeFunction, TypeTable } from './typing';
 
 type VarInfo = { type: Type, doc?: Documentation/*, range: Range*/ };
 
@@ -35,14 +35,36 @@ class Scope {
 
 }
 
-type BaseEvent = { location: Location; }
+namespace Context {
+
+  abstract class Base<Tag extends string> {
+    protected constructor(public readonly tag: Tag) {}
+  }
+
+  export class Function extends Base<'Function'> {
+    public constructor(public readonly theFunction: TypeFunction) { super('Function'); }
+  }
+  export class Table extends Base<'Table'> {
+    public constructor(public readonly theTable: TypeTable) { super('Table'); }
+  }
+
+}
+
+type ContextKind = keyof typeof Context;
+type ContextType<T extends ContextKind> = InstanceType<typeof Context[T]>;
+
+export enum LocateReason {
+  Text = 1,
+  Read = 2,
+  Write = 3
+}
 
 interface ScopingEvents {
   'fork': (location: Location, openingScope: Scope) => void;
   'join': (location: Location, closingScope: Scope) => void;
-  'pushContext': (location: Location, tag: string, what: any) => void;
-  'popContext': (location: Location, tag: string, what: any) => void;
-  'locate': (range: Range, name: string, type: Type) => void;
+  'pushContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
+  'popContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
+  'locate': (range: Range, name: string, type: Type, reason: LocateReason) => void;
 }
 
 export class Scoping extends TypedEmitter<ScopingEvents> {
@@ -52,7 +74,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
 
   private readonly scopes = [this.global];
 
-  private readonly contexts: Record<string, any[]> = {};
+  private readonly contexts: { [T in ContextKind]?: ContextType<T>[] } = {};
 
   public fork(location: Location) {
     this.local = Scope.makeFrom(this.local);
@@ -69,30 +91,32 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.local = this.local.parent!;
   }
 
-  public pushContext(location: Location, tag: string, what: any) {
+  public pushContext<T extends ContextKind>(location: Location, tag: T, ...args: ConstructorParameters<typeof Context[T]>) {
+    const context = new (Context[tag] as any)(...args) as ContextType<T>; // YYY: craps the bed otherwise
     if (!this.contexts[tag]) this.contexts[tag] = [];
-    this.contexts[tag].push(what);
+    this.contexts[tag]!.push(context as any);
 
-    this.emit('pushContext', location, tag, what);
+    this.emit('pushContext', location, context);
   }
 
-  public findContext(tag: string): any {
+  public findContext<T extends ContextKind>(tag: T) {
     const it = this.contexts[tag];
     assert(it, `Scoping.findContext: no context were pushed with the tag '${tag}'`);
     assert(it.length, `Scoping.findContext: no context left with the tag '${tag}'`);
-    return it[it.length-1];
+    return it[it.length-1] as ContextType<T>; // YYY: craps the bed otherwise
   }
 
-  public popContext(location: Location, tag: string) {
+  public popContext<T extends ContextKind>(location: Location, tag: T) {
     const it = this.contexts[tag];
     assert(it, `Scoping.popContext: no context were pushed with the tag '${tag}'`);
-    assert(it.length, `Scoping.popContext: no context left with the tag '${tag}'`);
+    const r = it.pop();
+    assert(r, `Scoping.popContext: no context left with the tag '${tag}'`);
 
-    this.emit('popContext', location, tag, it.pop());
+    this.emit('popContext', location, r);
   }
 
-  public locate(range: Range, name: string, type: Type) {
-    this.emit('locate', range, name, type);
+  public locate(range: Range, name: string, type: Type, reason: LocateReason) {
+    this.emit('locate', range, name, type, reason);
   }
 
   // public setGlobal(name: string, type: Type) {

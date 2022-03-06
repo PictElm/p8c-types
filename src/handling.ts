@@ -3,7 +3,7 @@ import { ast } from 'pico8parse';
 import { Location, Range } from './locating';
 import { log } from './logging';
 import { TypeSomeOp } from './operating';
-import { Scoping } from './scoping';
+import { LocateReason, Scoping } from './scoping';
 import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable, TypeSome } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
@@ -13,9 +13,9 @@ export class Handling {
 
   public static handle<T extends ast.Node>(scope: Scoping, node: T): Type[] | never {
     log.info("handling node of type " + node.type);
-    const a = Handling.handlers[node.type] as Handler<T> | undefined;
-    assert(a, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
-    return a(scope, node);
+    const h = Handling.handlers[node.type] as Handler<T> | undefined;
+    assert(h, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
+    return h(scope, node);
   }
 
   private static readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
@@ -29,8 +29,8 @@ export class Handling {
         .map(it => this.handle(scope, it)[0]);
       types.push(...this.handle(scope, node.arguments[node.arguments.length-1]));
 
-      const theFunction = scope.findContext('function') as { type: TypeFunction };
-      theFunction.type.setReturns(types);
+      const theFunction = scope.findContext('Function').theFunction;
+      theFunction.setReturns(types);
 
       return [];
     },
@@ -54,10 +54,10 @@ export class Handling {
 
         if ('Identifier' === it.type) {
           scope.set(it.name, initType);
-          scope.locate(Range.fromNode(it), it.name, initType);
+          scope.locate(Range.fromNode(it), it.name, initType, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(scope, it.base)[0];
-          scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType);
+          scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
@@ -89,6 +89,9 @@ export class Handling {
           }
         }
       }
+
+      this.handle(scope, node.expression);
+
       return [];
     },
     ForNumericStatement: (scope, node) => [],
@@ -113,12 +116,12 @@ export class Handling {
       scope.fork(startLocation);
         type.getParameters().forEach(([name, type], k) => {
           scope.set(name, type);
-          scope.locate(Range.fromNode(node.parameters[k]), name, type);
+          scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
         });
 
-        scope.pushContext(startLocation, 'function', { type });
+        scope.pushContext(startLocation, 'Function', type);
           node.body.forEach(it => this.handle(scope, it));
-        scope.popContext(endLocation, 'function');
+        scope.popContext(endLocation, 'Function');
       scope.join(endLocation);
 
       return [type];
@@ -126,7 +129,7 @@ export class Handling {
     // -> type
     Identifier: (scope, node) => {
       const r = scope.get(node.name);
-      scope.locate(Range.fromNode(node), node.name, r);
+      scope.locate(Range.fromNode(node), node.name, r, LocateReason.Read);
       return [r];
     },
     StringLiteral: (scope, node) => [new TypeString()],
@@ -174,7 +177,7 @@ export class Handling {
           ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
           : Type.noType();
 
-      scope.locate(Range.fromNode(node.identifier), node.identifier.name, r);
+      scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
 
       // XXX: if ('.' === node.indexer) assumed for now
       // baseType may change (right? with removing first param?)
@@ -196,7 +199,9 @@ export class Handling {
 
       return baseType instanceof TypeFunction
         ? baseType.getReturns(parameters)
-        : [Type.noType()];
+        : baseType instanceof TypeSome
+          ? [baseType.getApplied(new TypeSomeOp.__call(parameters))] // XXX: tuple gap
+          : [Type.noType()];
     },
     TableCallExpression: (scope, node) => [],
     StringCallExpression: (scope, node) => [],
