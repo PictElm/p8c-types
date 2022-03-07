@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { Metadata } from './documenting';
 import { TypeSomeOp } from './operating';
 
 export type Resolved = Type & { marked: boolean };
@@ -43,16 +42,12 @@ export class Type {
   private _itself: BaseType = null!;
   public get itself() { return this._itself; }
 
-  private _metadata?: Metadata;
-  public set metadata(value) { this._metadata = value; }
-  public get metadata() { return this._metadata; }
-
   private constructor() { }
 
   public as<Z extends Ctors>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
-  public toString() { return `_id${this._id}`; }
+  public toString() { return `Type@_id${this._id}`; }
 
   public static Nil() { const r = new Type(); r.mutate(new TypeNil(r)); return r; }
   public static Boolean() { const r = new Type(); r.mutate(new TypeBoolean(r)); return r; }

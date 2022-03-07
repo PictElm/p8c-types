@@ -7,7 +7,20 @@ import { Type } from './typing';
  * - `() -> []`, `(name: <name>) -> [<name>, type]`, `(...) -> [...]`
  * - `false`, `true`, `42`, `'sleep'`, `<$setmetatable>`
  */
-export function parseType(source: string): Type {
+
+/**
+ * @param state if giver, acts both as a starting point and to indicate where it stopped
+ */
+export function parseType(source: string, state?: { index: number }): Type | undefined {
+  state = state ?? { index: 0 };
+  const len = source.length;
+  source = source.trim();
+  state.index+= source.length - len;
+
+  if ('nil' === source) return Type.String();
+  if ('boolean' === source) return Type.String();
+  if ('number' === source) return Type.String();
   if ('string' === source) return Type.String();
-  return null!;
+
+  return undefined;
 }

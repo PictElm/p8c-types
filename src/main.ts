@@ -3,7 +3,7 @@ import { Documenting } from './documenting';
 import { Handling } from './handling';
 import { Document } from './locating';
 import { log } from './logging';
-import { Scoping } from './scoping';
+import { LocateReason, Scoping } from './scoping';
 
 const options: Partial<Options> = {
   comments: true,
@@ -22,10 +22,18 @@ o = z(z)
 o = z(o)
 o = o(z)
 o = o(o)
--- blabla
---z = function(tab) tab.num, tab.str = 0, "" return tab end
--- coucou
---o = z({})
+
+--- @alias Some = string
+--[[-
+	just some string
+]]
+someString = "hello world"
+
+--- more
+--- test
+
+z = function(tab) tab.num, tab.str = 0, "" return tab end
+o = z({})
 `;
   Document.loadString(src);
 
@@ -38,7 +46,13 @@ o = o(o)
     //.on('join', loc => log.event(`end of scope @: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
-    .on('locate', (range, name, type, why) => log.event(`${range.start}: {${["?", "t", "r", "w"][why]}} ${name}: ${type.itself}`))
+    .on('locate', (range, name, type, why) => log.event(`${range.start}: {${LocateReason[why]}} ${name}: ${type.itself}`))
+    ;
+
+  documenting
+    .on('type', (range, type) => log.event(`${range.start}: @type ${1 === type.length ? type[0] : `[${type.map(it => it.itself).join(", ")}]`}`))
+    .on('alias', (range, alias, type) => log.event(`${range.start}: @alias ${alias} = ${type.itself}`))
+    .on('documentation', (range, text) => log.event(`${range.start}: arbitrary documentation "${text}"`))
     ;
 
   handling

@@ -230,7 +230,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     TableKeyString: node => [],
     TableValue: node => [],
     Comment: node => {
-      log.info(node);
+      if (node.value.startsWith("-")) // YYY: doc comments strarts with a -
+        this.doc.process(Range.fromNode(node), node.value.slice(1));
       return [];
     },
   };
