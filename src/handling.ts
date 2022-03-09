@@ -5,11 +5,11 @@ import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
 import { TypeSomeOp } from './operating';
-import { LocateReason, Scoping } from './scoping';
+import { LocateReason, Scoping, VarInfo } from './scoping';
 import { Type, TypeFunction, TypeTable, TypeSome } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
-type Handler<T> = (node: T) => Type[]
+type Handler<T> = (node: T) => VarInfo[]
 
 interface HandlingEvents {
   'handle': (node: ast.Node) => void;
@@ -22,7 +22,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     private readonly doc: Documenting
   ) { super(); }
 
-  public handle<T extends ast.Node>(node: T): Type[] | never {
+  public handle<T extends ast.Node>(node: T): VarInfo[] | never {
     this.emit('handle', node);
     const h = this.handlers[node.type] as Handler<T> | undefined;
     assert(h, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
@@ -35,13 +35,13 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     BreakStatement: node => [],
     GotoStatement: node => [],
     ReturnStatement: node => {
-      const types = node.arguments
+      const infos = node.arguments
         .slice(0, -1)
         .map(it => this.handle(it)[0]);
-      types.push(...this.handle(node.arguments[node.arguments.length-1]));
+      infos.push(...this.handle(node.arguments[node.arguments.length-1]));
 
       const theFunction = this.scope.findContext('Function').theFunction;
-      theFunction.as(TypeFunction)?.setReturns(types);
+      theFunction.as(TypeFunction)?.setReturns(infos);
 
       return [];
     },
@@ -67,7 +67,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.set(it.name, initType);
           this.scope.locate(Range.fromNode(it), it.name, initType, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
-          const mayTable = this.handle(it.base)[0].itself;
+          const mayTable = this.handle(it.base)[0].type.itself;
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
@@ -120,8 +120,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         else isVararg = true;
       }
 
-      const type = Type.Function(names);
-      const functionType = type.as(TypeFunction)!;
+      const info = { type: Type.Function(names) };
+      const functionType = info.type.as(TypeFunction)!;
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
@@ -131,12 +131,29 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
         });
 
-        this.scope.pushContext(startLocation, 'Function', type);
+        this.scope.pushContext(startLocation, 'Function', info.type);
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Function');
       this.scope.join(endLocation);
 
-      return [type];
+      const it = node.identifier;
+      if (it) {
+        if ('Identifier' === it.type) {
+          this.scope.set("xyz", info);
+          this.scope.locate(Range.fromNode(it), it.name, info, LocateReason.Write);
+        } else { // MemberExpression
+          const mayTable = this.handle(it.base)[0].type.itself;
+          this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, info, LocateReason.Write);
+
+          // XXX: more of the '.' === it.indexer
+          if (mayTable instanceof TypeTable)
+            mayTable.setField(it.identifier.name, info);
+          else if (mayTable instanceof TypeSome)
+            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, info));
+        }
+      }
+
+      return [info];
     },
     // -> type
     Identifier: node => {
@@ -144,22 +161,24 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       this.scope.locate(Range.fromNode(node), node.name, r, LocateReason.Read);
       return [r];
     },
-    StringLiteral: node => [Type.String()],
-    NumericLiteral: node => [Type.Number()],
-    BooleanLiteral: node => [Type.Boolean()],
-    NilLiteral: node => [Type.Nil()],
+    StringLiteral: node => [{ type: Type.String() }],
+    NumericLiteral: node => [{ type: Type.Number() }],
+    BooleanLiteral: node => [{ type: Type.Boolean() }],
+    NilLiteral: node => [{ type: Type.Nil() }],
     // -> type[]
     VarargLiteral: node => [],
     // -> type
     TableConstructorExpression: node => {
-      const type = Type.Table();
-      const tableType = type.as(TypeTable)!;
+      const info = { type: Type.Table() };
+      const tableType = info.type.as(TypeTable)!;
       let autoIndex = 0;
 
       node.fields.forEach((it, k) => {
         switch (it.type) {
           case 'TableKey': {
-            ;
+            // NOTE: need to change where says xyzType and its the `itself`
+            const keyType = this.handle(it.key)[0].type.itself;
+            const valueType = this.handle(it.value)[0].type.itself;
           } break;
 
           case 'TableKeyString': {
@@ -175,20 +194,20 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       });
 
-      return [type];
+      return [info];
     },
     // -> type
     BinaryExpression: node => [],
     LogicalExpression: node => [],
     UnaryExpression: node => [],
     MemberExpression: node => {
-      const baseType = this.handle(node.base)[0].itself;
+      const baseType = this.handle(node.base)[0].type.itself;
 
       const r = baseType instanceof TypeTable
         ? baseType.getField(node.identifier.name)
         : baseType instanceof TypeSome
           ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
-          : Type.noType();
+          : { type: Type.noType() };
 
       this.scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
 
@@ -201,7 +220,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     // -> type[]
     CallExpression: node => {
       const base = node.base;
-      const baseType = this.handle(base)[0].itself;
+      const baseType = this.handle(base)[0].type.itself;
 
       const parameters = node.arguments
         .slice(0, -1)
@@ -212,7 +231,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         ? baseType.getReturns(parameters)
         : baseType instanceof TypeSome
           ? [baseType.getApplied(new TypeSomeOp.__call(parameters))] // XXX: tuple gap
-          : [Type.noType()];
+          : [{ type: Type.noType() }];
     },
     TableCallExpression: node => [],
     StringCallExpression: node => [],

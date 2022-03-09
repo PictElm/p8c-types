@@ -5,7 +5,7 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { Type } from './typing';
 
-type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
+export type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
 
 class Scope {
 
@@ -67,7 +67,7 @@ interface ScopingEvents {
   'join': (location: Location, closingScope: Scope) => void;
   'pushContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
   'popContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
-  'locate': (range: Range, name: string, type: Type, reason: LocateReason) => void;
+  'locate': (range: Range, name: string, variable: VarInfo, reason: LocateReason) => void;
 }
 
 export class Scoping extends TypedEmitter<ScopingEvents> {
@@ -118,8 +118,8 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.emit('popContext', location, r);
   }
 
-  public locate(range: Range, name: string, type: Type, reason: LocateReason) {
-    this.emit('locate', range, name, type, reason);
+  public locate(range: Range, name: string, variable: VarInfo, reason: LocateReason) {
+    this.emit('locate', range, name, variable, reason);
   }
 
   // public setGlobal(name: string, type: Type) {
@@ -130,14 +130,14 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   //   return this.global.variables[name];
   // }
 
-  public set(name: string, type: Type) {
-    log.info(`[local scope]: setting "${name}: ${type}"`);
-    this.local.variables[name] = { type };
+  public set(name: string, variable: VarInfo) {
+    log.info(`[local scope]: setting "${name}: ${variable.type}"`);
+    this.local.variables[name] = variable;
   }
 
   public get(name: string) {
     log.info(`[local scope]: getting "${name}"`);
-    return this.local.variables[name]?.type ?? Type.noType();
+    return this.local.variables[name] ?? { type: Type.noType() };
   }
 
   public getGlobals() {

@@ -46,7 +46,7 @@ o = z({})
     //.on('join', loc => log.event(`end of scope @: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
-    .on('locate', (range, name, type, why) => log.event(`${range.start}: {${LocateReason[why]}} ${name}: ${type.itself}`))
+    .on('locate', (range, name, info, why) => log.event(`${range.start}: {${LocateReason[why]}} ${name}: ${info.type.itself}`))
     ;
 
   documenting

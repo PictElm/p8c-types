@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { VarInfo } from './scoping';
 import { Resolved, Type, TypeFunction, TypeTable } from './typing';
 
 export abstract class TypeSomeOp<T extends any[] = unknown[]> {
@@ -17,25 +18,25 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
   protected nextRepresent(to: string) { return this.next?.represent(to) ?? to; }
   protected nextResolve(to: Resolved) { return this.next?.resolve(to) ?? to; }
 
-  public static __add = class __add extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __add = class __add extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __sub = class __sub extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __sub = class __sub extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __mul = class __mul extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __mul = class __mul extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __div = class __div extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __div = class __div extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __mod = class __mod extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __mod = class __mod extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __pow = class __pow extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __pow = class __pow extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __concat = class __concat extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __concat = class __concat extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
   public static __unm = class __unm extends TypeSomeOp<[]> {
@@ -44,16 +45,16 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
   public static __len = class __len extends TypeSomeOp<[]> {
   }
 
-  public static __eq = class __eq extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __eq = class __eq extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __lt = class __lt extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __lt = class __lt extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __le = class __le extends TypeSomeOp<[left: Type, right: Type]> {
+  public static __le = class __le extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
 
-  public static __index = class __index extends TypeSomeOp<[key: string | number | Type]> {
+  public static __index = class __index extends TypeSomeOp<[key: string | number | VarInfo]> {
 
     public override represent(to: string) {
       const [key] = this.args;
@@ -63,11 +64,11 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
           ? `${to}.${key}` // XXX: again, assumes '.'
           : 'number' === typeof key
             ? `${to}[${key}]`
-            : `${to}[${key.itself instanceof TypeFunction
+            : `${to}[${key.type.itself instanceof TypeFunction
                 ? "function"
-                : key.itself instanceof TypeTable
+                : key.type.itself instanceof TypeTable
                   ? "table"
-                  : key.itself}]`
+                  : key.type.itself}]`
       );
     }
 
@@ -77,11 +78,11 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
       if ('string' === typeof key)
         r = to.itself instanceof TypeTable
-          ? to.itself.getField(key).itself.resolved()
+          ? to.itself.getField(key).type.itself.resolved()
           : Type.noType().itself.resolved();
       else if ('number' === typeof key)
         r = to.itself instanceof TypeTable
-          ? to.itself.getIndex(key).itself.resolved()
+          ? to.itself.getIndex(key).type.itself.resolved()
           : Type.noType().itself.resolved();
       else throw "not implemented: __index by type";
 
@@ -90,21 +91,21 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
   }
 
-  public static __newindex = class __newindex extends TypeSomeOp<[key: string | number | Type, value: Type]> {
+  public static __newindex = class __newindex extends TypeSomeOp<[key: string | number | VarInfo, value: VarInfo]> {
 
     public override represent(to: string) {
       const [key, value] = this.args;
 
       return this.nextRepresent(
         'string' === typeof key
-          ? `${to}(.${key}: ${value.itself})` // XXX: again, assumes '.'
+          ? `${to}(.${key}: ${value.type.itself})` // XXX: again, assumes '.'
           : 'number' === typeof key
-            ? `${to}([${key}]: ${value.itself})`
-            : `${to}([${key.itself instanceof TypeFunction
+            ? `${to}([${key}]: ${value.type.itself})`
+            : `${to}([${key.type.itself instanceof TypeFunction
                 ? "function"
-                : key.itself instanceof TypeTable
+                : key.type.itself instanceof TypeTable
                   ? "table"
-                  : key.itself}]: ${value.itself})`
+                  : key.type.itself}]: ${value.type.itself})`
       );
     }
 
@@ -124,7 +125,7 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
   }
 
-  public static __call = class __call extends TypeSomeOp<[parameters: Type[]]> {
+  public static __call = class __call extends TypeSomeOp<[parameters: VarInfo[]]> {
 
     public override represent(to: string) {
       const [parameters] = this.args;
@@ -135,7 +136,7 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
       const [parameters] = this.args;
       return this.nextResolve(
         to.itself instanceof TypeFunction
-          ? to.itself.getReturns(parameters)[0].itself.resolved() // XXX: tuple gap
+          ? to.itself.getReturns(parameters)[0].type.itself.resolved() // XXX: tuple gap
           : Type.noType().itself.resolved()
       );
     }

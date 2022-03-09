@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { TypeSomeOp } from './operating';
+import { VarInfo } from './scoping';
 
 export type Resolved = Type & { marked: boolean };
 
@@ -111,22 +112,22 @@ export class TypeVararg extends BaseType {
 
 export class TypeTable extends BaseType {
 
-  private fields: Record<string, Type> = {};
-  private indices: Array<Type> = [];
+  private fields: Record<string, VarInfo> = {};
+  private indices: Array<VarInfo> = [];
 
-  public setField(field: string, type: Type) {
+  public setField(field: string, type: VarInfo) {
     this.fields[field] = type;
   }
 
-  public getField(field: string): Type {
+  public getField(field: string): VarInfo {
     return this.fields[field] ?? Type.noType();
   }
 
-  public setIndex(index: number, type: Type) {
+  public setIndex(index: number, type: VarInfo) {
     this.indices[index] = type;
   }
 
-  public getIndex(index: number): Type {
+  public getIndex(index: number): VarInfo {
     return this.indices[index] ?? Type.noType();
   }
 
@@ -134,12 +135,12 @@ export class TypeTable extends BaseType {
     const r: string[] = [];
 
     for (const key in this.fields)
-      r.push(`${key}: ${this.fields[key].itself}`);
+      r.push(`${key}: ${this.fields[key].type.itself}`);
 
     // TODO: should deal with table-as-list better
     for (let k = 0; k < this.indices.length; k++)
       if (this.indices[k])
-        r.push(`[${k}]: ${this.indices[k].itself}`);
+        r.push(`[${k}]: ${this.indices[k].type.itself}`);
 
     return r.length ? `{ ${r.join(", ")} }` : "{}";
   }
@@ -149,12 +150,18 @@ export class TypeTable extends BaseType {
     const tableType = r.as(TypeTable)!;
 
     for (const key in this.fields)
-      tableType.setField(key, this.fields[key].itself.resolved());
+      tableType.setField(key, {
+        type: this.fields[key].type.itself.resolved(),
+        doc: this.fields[key].doc,
+      });
 
     // TODO: should deal with table-as-list better
     for (let k = 0; k < this.indices.length; k++)
       if (this.indices[k])
-        tableType.setIndex(k, this.indices[k].itself.resolved());
+        tableType.setIndex(k, {
+          type: this.indices[k].type.itself.resolved(),
+          doc: this.indices[k].doc,
+        });
 
     return BaseType.mark(r);
   }
@@ -163,60 +170,63 @@ export class TypeTable extends BaseType {
 
 export class TypeFunction extends BaseType {
 
-  private returns: Type[] = [];
-  private parameters: [name: string, type: Type][];
+  private returns: VarInfo[] = [];
+  private parameters: [name: string, type: VarInfo][];
 
   public constructor(outself: Type, names: string[]) {
     super(outself);
-    this.parameters = names.map(it => [it, Type.Some(it)]);
+    this.parameters = names.map(name => [name, { type: Type.Some(name) }]);
   }
 
   public getParameters() {
     return this.parameters;
   }
 
-  public setReturns(types: Type[]) {
-    this.returns = types;
+  public setReturns(infos: VarInfo[]) {
+    this.returns = infos;
   }
 
-  public getReturns(applying: Type[]): Type[] {
+  public getReturns(applying: VarInfo[]): VarInfo[] {
     const toRevert: TypeSome[] = [];
 
-    this.parameters.forEach(([_, type], k) => {
-      if (type.itself instanceof TypeSome) {
-        toRevert.push(type.itself);
-        type.itself.actsAs(applying[k]);
+    this.parameters.forEach(([_, info], k) => {
+      if (info.type.itself instanceof TypeSome) {
+        toRevert.push(info.type.itself);
+        info.type.itself.actsAs(applying[k]);
       }
     });
 
-    const r = this.returns.map(it => it.itself.resolved()); // XXX: tuple gap
+    const r = this.returns.map(info => ({
+      type: info.type.itself.resolved(),
+      doc: info.doc,
+    })); // XXX: tuple gap
 
-    toRevert.forEach(it => it.revert());
+    toRevert.forEach(type => type.revert());
 
     return r
   }
 
   public override toString() {
     const parameters = this.parameters
-      .map(([name, type]) => `${name}: ${type.itself}`)
+      .map(([name, info]) => `${name}: ${info.type.itself}`)
       .join(", ");
 
     let returns: string = "";
     if (this.returns.length) {
       const toRevert: TypeSome[] = [];
 
-      this.parameters.forEach(([_, type]) => {
-        if (type.itself instanceof TypeSome) {
-          toRevert.push(type.itself);
-          type.itself.actsAs(type);
+      this.parameters.forEach(([_, info]) => {
+        if (info.type.itself instanceof TypeSome) {
+          toRevert.push(info.type.itself);
+          info.type.itself.actsAs(info);
         }
       });
 
       returns = this.returns
-        .map(it => `${it.itself}`)
+        .map(info => `${info.type.itself}`)
         .join(", "); // XXX: tuple gap [?]
 
-      toRevert.forEach(it => it.revert());
+      toRevert.forEach(type => type.revert());
     }
 
     return `(${parameters}) -> [${returns}]`;
@@ -244,7 +254,7 @@ export class TypeFunction extends BaseType {
 
 export class TypeSome extends BaseType {
 
-  private acts?: Type;
+  private acts?: VarInfo;
   private done?: TypeSomeOp;
 
   public constructor(outself: Type, private from?: string) { super(outself); }
@@ -258,17 +268,17 @@ export class TypeSome extends BaseType {
   // not in-place applied (a new type is created)
   public getApplied<T extends any[]>(operation: TypeSomeOp<T>) {
     //const repr = this.from && operation.represent(this.from);
-    const r = Type.Some();
-    const someType = r.as(TypeSome)!;
+    const r = { type: Type.Some() };
+    const someType = r.type.as(TypeSome)!;
 
     // "acts as `this` with `operation` done on it"
-    someType.acts = this.outself;
+    someType.acts = { type: this.outself }; // XXX: doc gap
     someType.done = operation;
 
     return r;
   }
 
-  public actsAs(type: Type) {
+  public actsAs(type: VarInfo) {
     assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
     this.acts = type;
   }
@@ -279,28 +289,28 @@ export class TypeSome extends BaseType {
 
   public override toString() {
     if (!this.acts) return `<${this.from ?? "?"}>`;
-    if (!this.done) return this === this.acts.itself
+    if (!this.done) return this === this.acts.type.itself
         ? `<${this.from ?? "?"}>`
-        : `${this.acts.itself}`;
+        : `${this.acts.type.itself}`;
 
     const what = this.done;
-    const to = this === this.acts.itself
+    const to = this === this.acts.type.itself
       ? `<${this.from ?? "?"}>`
-      : `${this.acts.itself}`;
+      : `${this.acts.type.itself}`;
 
     return what.represent(to);
   }
 
   public override resolved() {
     if (!this.acts) return Type.noType().itself.resolved();
-    if (!this.done) return this === this.acts.itself
+    if (!this.done) return this === this.acts.type.itself
         ? BaseType.mark(this.outself)
-        : this.acts.itself.resolved();
+        : this.acts.type.itself.resolved();
 
     const what = this.done;
-    const to = this === this.acts.itself
+    const to = this === this.acts.type.itself
       ? BaseType.mark(this.outself)
-      : this.acts.itself.resolved();
+      : this.acts.type.itself.resolved();
 
     return what.resolve(to);
   }

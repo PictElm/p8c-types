@@ -1,5 +1,6 @@
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Range } from './locating';
+import { log } from './logging';
 import { parseType } from './parsing';
 import { Type } from './typing';
 
@@ -96,6 +97,11 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
   private globals: Record<string, Type> = {};
 
   private entries: Metadata[] = [];
+
+  public query(range: Range, name: string): Metadata {
+    log.error("TODO: Documenting.query");
+    return null!;
+  }
 
   public process(range: Range, text: string) {
     const last = this.entries[this.entries.length-1];
