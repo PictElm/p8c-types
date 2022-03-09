@@ -1,16 +1,30 @@
 import { TypedEmitter } from 'tiny-typed-emitter';
-import { Range } from './locating';
-import { log } from './logging';
+import { Location, Range } from './locating';
 import { parseType } from './parsing';
 import { Type } from './typing';
 
-class Description extends Array<string> {
+class Description {
 
-  public readonly tags: Record<string, string[]> = {};
+  private readonly tags: Record<string, string[]> = {};
+  private readonly text: Array<string> = [];
 
   public pushTag(tag: string, text: string) {
     const it = this.tags[tag] ?? (this.tags[tag] = []);
     it.push(text);
+  }
+
+  public pushText(text: string) {
+    this.text.push(text);
+  }
+
+  public toString() {
+    return [
+      ...this.text,
+      ...Object
+        .keys(this.tags)
+        .sort()
+        .map(tag => `@${tag} - ${this.tags[tag].join("\n"+" ".repeat(tag.length+4))}`)
+    ].join("\n");
   }
 
 }
@@ -98,9 +112,16 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
   private entries: Metadata[] = [];
 
-  public query(range: Range, name: string): Metadata {
-    log.error("TODO: Documenting.query");
-    return null!;
+  public matching(location: Location): Metadata | undefined {
+    return this
+      .entries
+      .find(it => it
+        .sources
+        .find(ti =>
+          ti.start.line === location.line - 1 // line above
+          || ti.start.line === location.line // same line
+        )
+      );
   }
 
   public process(range: Range, text: string) {
@@ -216,7 +237,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
           }
         }
       } else {
-        entry.description.push(line);
+        entry.description.pushText(line);
         this.emit('documentation', range, line); // YYY: addapt the range here too?
       }
     });

@@ -1,9 +1,9 @@
 import { Options, parse } from 'pico8parse';
 import { Documenting } from './documenting';
 import { Handling } from './handling';
-import { Document } from './locating';
+import { Document, Range } from './locating';
 import { log } from './logging';
-import { LocateReason, Scoping } from './scoping';
+import { LocateReason, Scoping, VarInfo } from './scoping';
 
 const options: Partial<Options> = {
   comments: true,
@@ -14,26 +14,19 @@ const options: Partial<Options> = {
 };
 
 function main(args: string[]) {
-  log.level = 'none';
+  // log.level = 'none';
 
   const src = `
-z = function(p) return p end
-o = z(z)
-o = z(o)
-o = o(z)
-o = o(o)
+--- @remark some
+--- @remark more
+--- this is a string
+--- and here is its description
+--- (a third line)
+string = "hello world"
 
---- @alias Some = string
---[[-
-	just some string
-]]
-someString = "hello world"
+a = {} --- tablabla
 
---- more
---- test
-
-z = function(tab) tab.num, tab.str = 0, "" return tab end
-o = z({})
+a.test = string
 `;
   Document.loadString(src);
 
@@ -46,20 +39,34 @@ o = z({})
     //.on('join', loc => log.event(`end of scope @: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
-    .on('locate', (range, name, info, why) => log.event(`${range.start}: {${LocateReason[why]}} ${name}: ${info.type.itself}`))
+    .on('locate', onLocate)
     ;
 
   documenting
-    .on('type', (range, type) => log.event(`${range.start}: @type ${1 === type.length ? type[0] : `[${type.map(it => it.itself).join(", ")}]`}`))
-    .on('alias', (range, alias, type) => log.event(`${range.start}: @alias ${alias} = ${type.itself}`))
-    .on('documentation', (range, text) => log.event(`${range.start}: arbitrary documentation "${text}"`))
+    //.on('type', (range, type) => log.event(`${range.start}: @type ${1 === type.length ? type[0] : `[${type.map(it => it.itself).join(", ")}]`}`))
+    //.on('alias', (range, alias, type) => log.event(`${range.start}: @alias ${alias} = ${type.itself}`))
+    //.on('documentation', (range, text) => log.event(`${range.start}: arbitrary documentation "${text}"`))
     ;
 
   handling
-    .on('handle', node => log.info("handling node of type " + node.type))
+    //.on('handle', node => log.info("handling node of type " + node.type))
     ;
 
   handling.handle(parse(src, options));
 }
 
 main(process.argv.slice(2));
+
+function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) {
+  log.event([
+    `${range.start}: {${LocateReason[why]}}`,
+    `\t${name}: ${info.type.itself}`,
+    `\t> ${info.doc?.description
+        .toString()
+        .replace("\r", "")
+        .split("\n")
+        .join("\n\t> ")
+      ?? "* nothing *"
+    }`,
+  ].join("\n"));
+}

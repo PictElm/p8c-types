@@ -23,9 +23,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
   ) { super(); }
 
   public handle<T extends ast.Node>(node: T): VarInfo[] | never {
+    assert(node, "Handling.handle: trying to handle an undefined node");
     this.emit('handle', node);
     const h = this.handlers[node.type] as Handler<T> | undefined;
-    assert(h, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)}`);
+    assert(h, `Handling.handle: trying to handler node of type ${node.type} at ${Range.fromNode(node)} (missing handler)`);
     return h(node);
   }
 
@@ -55,26 +56,29 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       // but as it stands, this works out alright (maybe?)
     },
     AssignmentStatement: node => {
-      const types = node.init
+      const infos = node.init
         .slice(0, -1)
         .map(it => this.handle(it)[0]);
-      types.push(...this.handle(node.init[node.init.length-1]));
+      infos.push(...this.handle(node.init[node.init.length-1]));
 
       node.variables.forEach((it, k) => {
-        const initType = types[k] ?? Type.noType();
+        const initInfo = infos[k] ?? { type: Type.noType() };
+        const mayDoc = this.doc.matching(Location.fromNodeStart(it));
+
+        if (mayDoc) initInfo.doc = mayDoc;
 
         if ('Identifier' === it.type) {
-          this.scope.set(it.name, initType);
-          this.scope.locate(Range.fromNode(it), it.name, initType, LocateReason.Write);
+          this.scope.set(it.name, initInfo);
+          this.scope.locate(Range.fromNode(it), it.name, initInfo, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
           const mayTable = this.handle(it.base)[0].type.itself;
-          this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initType, LocateReason.Write);
+          this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initInfo, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
           if (mayTable instanceof TypeTable)
-            mayTable.setField(it.identifier.name, initType);
+            mayTable.setField(it.identifier.name, initInfo);
           else if (mayTable instanceof TypeSome)
-            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, initType));
+            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, initInfo));
         }
       });
 
@@ -157,9 +161,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     },
     // -> type
     Identifier: node => {
-      const r = this.scope.get(node.name);
-      this.scope.locate(Range.fromNode(node), node.name, r, LocateReason.Read);
-      return [r];
+      const info = this.scope.get(node.name);
+      this.scope.locate(Range.fromNode(node), node.name, info, LocateReason.Read);
+      return [info];
     },
     StringLiteral: node => [{ type: Type.String() }],
     NumericLiteral: node => [{ type: Type.Number() }],
@@ -225,7 +229,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const parameters = node.arguments
         .slice(0, -1)
         .map(it => this.handle(it)[0]);
-      parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
+      if (node.arguments.length)
+        parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
 
       return baseType instanceof TypeFunction
         ? baseType.getReturns(parameters)

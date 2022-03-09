@@ -45,6 +45,16 @@ export class Location {
     public readonly file?: string,
   ) { }
 
+  /**
+   * - &lt;0 when `this` before `mate`
+   * - &gt;0 when `this` after `mate`
+   * - =0 otherwise
+   */
+  public compare(mate: Location) {
+    const lineDiff = this.line - mate.line;
+    return lineDiff || this.character - mate.character;
+  }
+
   public static fromNodeStart(node: ast.Node) {
     const a = node.loc;
     assert(a, "Location.fromNodeStart: node has not loc field");
@@ -79,6 +89,10 @@ export class Range {
     /** included */ public readonly start: Location,
     /** excluded */ public readonly end: Location
   ) { }
+
+  public contains(location: Location) {
+    return this.start.compare(location) <= 0 && 0 < this.end.compare(location);
+  }
 
   public static emptyRange() { return new Range(null!, null!); }
 
