@@ -3,7 +3,7 @@ import chaiExclude from 'chai-exclude';
 use(chaiExclude);
 
 import { parseType } from '../src/parsing';
-import { TypeString } from '../src/typing';
+import { Type } from '../src/typing';
 
 
 describe("parse", () => {
@@ -12,6 +12,6 @@ describe("parse", () => {
 
   it("exists", () => expect(parseType).to.not.be.undefined);
 
-  it("succeed", () => expectCommon(parseType("string")).to.equal(new TypeString()));
+  it("succeed", () => expectCommon(parseType("string")).to.equal(Type.String()));
 
 });

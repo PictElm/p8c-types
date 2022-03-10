@@ -39,7 +39,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const infos = node.arguments
         .slice(0, -1)
         .map(it => this.handle(it)[0]);
-      infos.push(...this.handle(node.arguments[node.arguments.length-1]));
+      if (node.arguments.length)
+        infos.push(...this.handle(node.arguments[node.arguments.length-1]));
 
       const theFunction = this.scope.findContext('Function').theFunction;
       theFunction.as(TypeFunction)?.setReturns(infos);
@@ -88,6 +89,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     CallStatement: node => {
       const expr = node.expression;
       const base = expr.base;
+      /* istanbul ignore next */
       if ('Identifier' === base.type && "___" === base.name) {
         log.info(`___ found at ${Location.fromNodeStart(base)}`);
         if ('CallExpression' === expr.type && expr.arguments.length) {
@@ -143,7 +145,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const it = node.identifier;
       if (it) {
         if ('Identifier' === it.type) {
-          this.scope.set("xyz", info);
+          this.scope.set(it.name, info); // XXX: locality gap
           this.scope.locate(Range.fromNode(it), it.name, info, LocateReason.Write);
         } else { // MemberExpression
           const mayTable = this.handle(it.base)[0].type.itself;
@@ -157,7 +159,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
-      return [info];
+      return it ? [] : [info];
     },
     // -> type
     Identifier: node => {

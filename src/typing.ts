@@ -186,7 +186,9 @@ export class TypeFunction extends BaseType {
     this.returns = infos;
   }
 
-  public getReturns(applying: VarInfo[]): VarInfo[] {
+  public getReturns(applying?: VarInfo[]): VarInfo[] {
+    if (!applying) return this.returns;
+
     const toRevert: TypeSome[] = [];
 
     this.parameters.forEach(([_, info], k) => {
