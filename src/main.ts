@@ -13,20 +13,22 @@ const options: Partial<Options> = {
   encodingMode: 'pseudo-latin1',
 };
 
+let scopeIndentation = 0;
+function indentation() {
+  return "\t".repeat(scopeIndentation);
+}
+
 function main(args: string[]) {
   // log.level = 'none';
 
   const src = `
---- @remark some
---- @remark more
---- this is a string
---- and here is its description
---- (a third line)
-string = "hello world"
-
-a = {} --- tablabla
-
-a.test = string
+x, y, z = 0
+a = 0
+while z do
+  a = ""
+  b = true
+end
+b = a, b
 `;
   Document.loadString(src);
 
@@ -35,8 +37,8 @@ a.test = string
   const handling = new Handling(scoping, documenting);
 
   scoping
-    //.on('fork', loc => log.event(`new scope from: ${loc}`))
-    //.on('join', loc => log.event(`end of scope @: ${loc}`))
+    .on('fork', loc => log.event(`${"\t".repeat(scopeIndentation++)}{ new scope from: ${loc}`))
+    .on('join', loc => log.event(`${"\t".repeat(--scopeIndentation)}} end of a scope: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
     .on('locate', onLocate)
@@ -64,9 +66,9 @@ function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) 
     `\t> ${info.doc?.description
         .toString()
         .replace("\r", "")
-        .split("\n")
-        .join("\n\t> ")
+        .split(`\n${indentation()}`)
+        .join(`\n${indentation()}\t> `)
       ?? "* nothing *"
     }`,
-  ].join("\n"));
+  ].join(`\n${indentation()}`));
 }

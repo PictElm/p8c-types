@@ -48,8 +48,33 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       return [];
     },
     IfStatement: node => [],
-    WhileStatement: node => [],
-    DoStatement: node => [],
+    WhileStatement: node => {
+      const startLocation = Location.fromNodeStart(node);
+      const endLocation = Location.fromNodeEnd(node);
+
+      this.scope.fork(startLocation);
+        // NODE: same as repeat, the contition is in the same scope
+        // here, its just kept outside of the context for.. reasons
+        const infoCondition = this.handle(node.condition);
+        this.scope.pushContext(startLocation, 'While');
+          node.body.forEach(it => this.handle(it));
+        this.scope.popContext(endLocation, 'While');
+      this.scope.join(endLocation, true, false);
+
+      return [];
+    },
+    DoStatement: node => {
+      const startLocation = Location.fromNodeStart(node);
+      const endLocation = Location.fromNodeEnd(node);
+
+      this.scope.fork(startLocation);
+        this.scope.pushContext(startLocation, 'Do');
+          node.body.forEach(it => this.handle(it));
+        this.scope.popContext(endLocation, 'Do');
+      this.scope.join(endLocation, true, true);
+
+      return [];
+    },
     RepeatStatement: node => [],
     LocalStatement: node => {
       return this.handlers['AssignmentStatement']!(node as any); // XXX!
@@ -132,6 +157,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const endLocation = Location.fromNodeEnd(node);
 
       this.scope.fork(startLocation);
+        // TODO: function type might benefit from having ref to its
+        // inner scope (especially if trying typing some side-effects of calls)
         functionType.getParameters().forEach(([name, type], k) => {
           this.scope.set(name, type);
           this.scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
@@ -140,7 +167,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.pushContext(startLocation, 'Function', info.type);
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Function');
-      this.scope.join(endLocation);
+      this.scope.join(endLocation, false);
 
       const it = node.identifier;
       if (it) {
@@ -249,7 +276,16 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     ElseClause: node => [],
     Chunk: node => {
       node.comments?.forEach(it => this.handle(it));
-      node.body.forEach(it => this.handle(it));
+
+      const startLocation = Location.fromNodeStart(node);
+      const endLocation = Location.fromNodeEnd(node);
+
+      this.scope.fork(startLocation);
+        this.scope.pushContext(startLocation, 'Do');
+          node.body.forEach(it => this.handle(it));
+        this.scope.popContext(endLocation, 'Do');
+      this.scope.join(endLocation, false);
+
       return [];
     },
     TableKey: node => [],

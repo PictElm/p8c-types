@@ -33,6 +33,8 @@ type Ctors
   | typeof TypeTable
   | typeof TypeFunction
   | typeof TypeSome
+  | typeof TypeUnion
+  | typeof TypeIntersection
   ;
 
 export class Type {
@@ -59,6 +61,8 @@ export class Type {
   public static Table() { const r = new Type(); r.mutate(new TypeTable(r)); return r; }
   public static Function(names: string[]) { const r = new Type(); r.mutate(new TypeFunction(r, names)); return r; }
   public static Some(from?: string) { const r = new Type(); r.mutate(new TypeSome(r, from)); return r; }
+  public static Union(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeUnion(r, left, right)); return r; }
+  public static Intersection(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeIntersection(r, left, right)); return r; }
 
   public static noType() { return Type.Nil(); } // YYY?
 
@@ -318,3 +322,42 @@ export class TypeSome extends BaseType {
   }
 
 }
+
+export class TypeUnion extends BaseType {
+
+  public constructor(outself: Type,
+    private left: Type,
+    private right: Type,
+  ) { super(outself); }
+
+  public override toString() {
+    return `${this.left.itself} | ${this.right.itself}`;
+  }
+
+  public override resolved(): Resolved {
+    return this.left.itself.constructor === this.right.itself.constructor
+      ? this.left.itself.resolved()
+      : Type.noType().itself.resolved(); // XXX: absolutely not
+  }
+
+}
+
+export class TypeIntersection extends BaseType {
+
+  public constructor(outself: Type,
+    private left: Type,
+    private right: Type,
+  ) { super(outself); }
+
+  public override toString() {
+    return `${this.left.itself} & ${this.right.itself}`;
+  }
+
+  public override resolved(): Resolved {
+    return this.left.itself.constructor === this.right.itself.constructor
+      ? this.left.itself.resolved()
+      : Type.noType().itself.resolved(); // XXX: absolutely not
+  }
+
+}
+

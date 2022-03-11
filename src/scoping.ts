@@ -19,6 +19,28 @@ class Scope {
     this.variables = Object.create(parent?.variables ?? null);
   }
 
+  public mergeInfo(from: Scope, override: boolean) {
+    for (const name in from.variables) {
+      const old = this.variables[name];
+      const niw = from.variables[name];
+      log.info(`[parent -> local] name: ${name} (${old?.type ?? "(not present)"} -> ${niw.type})`);
+
+      // if variable is not local
+      if (old && !Object.is(niw, old)) {
+        if (override) old.type = niw.type;
+        else old.type = Type.Union(old.type, niw.type);
+
+        // XXX: if a global variable is _defined_ within the child scope,
+        // it should (if override not set) have a type `nil | <xyz>`
+        // (as every name are implicitely typed `nil` in global scope...)
+        // probably this could be done in the handling of the assignment
+        // itself, but this would block typing side effects of function calls
+
+        if (niw.doc) old.doc = niw.doc;
+      }
+    }
+  }
+
   public open(start: Location) { this.range = new Range(start, this.range.end); }
   public close(end: Location) { this.range = new Range(this.range.start, end); }
 
@@ -49,6 +71,12 @@ namespace Context {
   }
   export class Table extends Base<'Table'> {
     public constructor(public readonly theTable: Type) { super('Table'); }
+  }
+  export class Do extends Base<'Do'> {
+    public constructor() { super('Do'); }
+  }
+  export class While extends Base<'While'> {
+    public constructor() { super('While'); }
   }
 
 }
@@ -87,11 +115,13 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.scopes.push(this.local);
   }
 
-  public join(location: Location) {
+  public join(location: Location, merge: boolean, overrideTypes?: boolean) {
+    assert(this.local.parent, "Scoping.join: trying to one too many scope");
     this.emit('join', location, this.local);
+    if (merge) this.local.parent.mergeInfo(this.local, !!overrideTypes);
 
     this.local.close(location);
-    this.local = this.local.parent!;
+    this.local = this.local.parent;
   }
 
   public pushContext<T extends ContextKind>(location: Location, tag: T, ...args: ConstructorParameters<typeof Context[T]>) {
