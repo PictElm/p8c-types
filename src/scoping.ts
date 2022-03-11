@@ -170,6 +170,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     return this.local.variables[name] ?? { type: Type.noType() };
   }
 
+  /* istanbul ignore next */
   public getGlobals() {
     const r: Record<string, VarInfo> = {};
 
@@ -179,6 +180,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     return r;
   }
 
+  /* istanbul ignore next */
   public getLocals() {
     const r: Record<string, VarInfo> = {};
 

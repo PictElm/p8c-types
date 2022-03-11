@@ -17,9 +17,9 @@ export function parseType(source: string, state?: { index: number }): Type | und
   source = source.trim();
   state.index+= source.length - len;
 
-  if ('nil' === source) return Type.String();
-  if ('boolean' === source) return Type.String();
-  if ('number' === source) return Type.String();
+  if ('nil' === source) return Type.Nil();
+  if ('boolean' === source) return Type.Boolean();
+  if ('number' === source) return Type.Number();
   if ('string' === source) return Type.String();
 
   return undefined;

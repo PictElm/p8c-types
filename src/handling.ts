@@ -85,7 +85,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const infos = node.init
         .slice(0, -1)
         .map(it => this.handle(it)[0]);
-      infos.push(...this.handle(node.init[node.init.length-1]));
+      if (node.init.length) // XXX: maybe temporary (LocalStatement redirects here, may have no init)
+        infos.push(...this.handle(node.init[node.init.length-1]));
 
       node.variables.forEach((it, k) => {
         const initInfo = infos[k] ?? { type: Type.noType() };

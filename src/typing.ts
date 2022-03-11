@@ -22,6 +22,22 @@ abstract class BaseType { // YYY?
 
 }
 
+abstract class BaseTypeLiteral<Eq> extends BaseType {
+
+  public constructor(outself: Type,
+    protected value: Eq
+  ) { super(outself); }
+
+  public setLiterals(literal: Eq) {
+    this.value;
+  }
+
+  public getLiterals() {
+    return this.value;
+  }
+
+}
+
 // help :'
 type Ctors
   = typeof TypeNil
@@ -35,6 +51,9 @@ type Ctors
   | typeof TypeSome
   | typeof TypeUnion
   | typeof TypeIntersection
+  | typeof TypeLiteralBoolean
+  | typeof TypeLiteralNumber
+  | typeof TypeLiteralString
   ;
 
 export class Type {
@@ -63,6 +82,9 @@ export class Type {
   public static Some(from?: string) { const r = new Type(); r.mutate(new TypeSome(r, from)); return r; }
   public static Union(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeUnion(r, left, right)); return r; }
   public static Intersection(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeIntersection(r, left, right)); return r; }
+  public static LiteralBoolean(value: boolean) { const r = new Type(); r.mutate(new TypeLiteralBoolean(r, value)); return r; }
+  public static LiteralNumber(value: number) { const r = new Type(); r.mutate(new TypeLiteralNumber(r, value)); return r; }
+  public static LiteralString(value: string) { const r = new Type(); r.mutate(new TypeLiteralString(r, value)); return r; }
 
   public static noType() { return Type.Nil(); } // YYY?
 
@@ -93,6 +115,42 @@ export class TypeString extends BaseType {
 
   public override toString() { return "string"; }
   public override resolved(): Resolved { return BaseType.mark(Type.String()); }
+
+}
+
+export class TypeLiteralBoolean extends BaseTypeLiteral<boolean> {
+
+  public override toString() {
+    return this.value.toString();
+  }
+
+  public resolved(): Resolved {
+    return BaseType.mark(Type.LiteralBoolean(this.value));
+  }
+
+}
+
+export class TypeLiteralNumber extends BaseTypeLiteral<number> {
+
+  public override toString() {
+    return this.value.toFixed(); // TBD or something
+  }
+
+  public resolved(): Resolved {
+    return BaseType.mark(Type.LiteralNumber(this.value));
+  }
+
+}
+
+export class TypeLiteralString extends BaseTypeLiteral<string> {
+
+  public override toString() {
+    return `'${this.value}'`;
+  }
+
+  public resolved(): Resolved {
+    return BaseType.mark(Type.LiteralString(this.value));
+  }
 
 }
 

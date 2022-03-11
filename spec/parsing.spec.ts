@@ -5,13 +5,36 @@ use(chaiExclude);
 import { parseType } from '../src/parsing';
 import { Type } from '../src/typing';
 
+function expectCommon(o: Type | undefined, type: Type) {
+  expect(o, "parsed result").to.not.be.undefined;
+  expect(o?.itself, "type itself").to.be.instanceOf(type.itself.constructor);
+  expect(o?.itself, "type itself").excludingEvery('_id').to.deep.equal(type.itself);
+}
 
-describe("parse", () => {
+describe("parses primitives", () => {
 
-  const expectCommon = (o: unknown) => ({ to: expect(o).excluding('_id').deep });
+  it("does", () => {
+    expectCommon(parseType("nil"), Type.Nil());
+    expectCommon(parseType("boolean"), Type.Boolean());
+    expectCommon(parseType("number"), Type.Number());
+    expectCommon(parseType("string"), Type.String());
+    // expectCommon(parseType("thread"), Type.Thread());
+  });
 
-  it("exists", () => expect(parseType).to.not.be.undefined);
+});
 
-  it("succeed", () => expectCommon(parseType("string")).to.equal(Type.String()));
+describe("parses tables", () => {
+
+  it("tables", () => {
+    expectCommon(parseType("{}"), Type.Table());
+  });
+
+});
+
+describe("parses functions", () => {
+
+  it("functions", () => {
+    expectCommon(parseType("() -> []"), Type.Function([]));
+  });
 
 });
