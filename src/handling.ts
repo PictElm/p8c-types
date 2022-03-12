@@ -15,6 +15,17 @@ interface HandlingEvents {
   'handle': (node: ast.Node) => void;
 }
 
+/**
+ * main entry point (for now) for traversing the AST result of parsing
+ * 
+ * @emits 'handle' when a new node will be entered (regardless of wheather a handler was found)
+ * 
+ * @example
+ * const scoping = new Scoping();
+ * const documenting = new Documenting();
+ * const handling = new Handling(scoping, documenting);
+ * handling.handle(parse(src, options))
+ */
 export class Handling extends TypedEmitter<HandlingEvents> {
 
   public constructor(
@@ -22,6 +33,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     private readonly doc: Documenting
   ) { super(); }
 
+  /**
+   * handled a node according to its type
+   * 
+   * @throws when node is of an unknown type
+   */
   public handle<T extends ast.Node>(node: T): VarInfo[] | never {
     assert(node, "Handling.handle: trying to handle an undefined node");
     this.emit('handle', node);
@@ -30,6 +46,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     return h(node);
   }
 
+  // TODO: would like to make it possible to insert your own handlers,
+  // this can be done using the 'handle' even for now
+  // but it does not enable "preventDefault" kind of thing
   private readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
     // -> never
     LabelStatement: node => [],

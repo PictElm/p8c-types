@@ -2,9 +2,15 @@ import assert from 'assert';
 import { TypeSomeOp } from './operating';
 import { VarInfo } from './scoping';
 
+/**
+ * when a type is resolved, it is marked
+ * 
+ * (idea was preventing a same entity to be resolved multiple times)
+ */
 export type Resolved = Type & { marked: boolean };
 
-abstract class BaseType { // YYY?
+/** this is the underlying abstract class for a type `itself` */
+abstract class BaseType {
 
   public constructor (protected readonly outself: Type) { }
 
@@ -22,6 +28,7 @@ abstract class BaseType { // YYY?
 
 }
 
+/** underlying abstract class for literal types (boolean, number, string) */
 abstract class BaseTypeLiteral<Eq> extends BaseType {
 
   public constructor(outself: Type,
@@ -38,7 +45,10 @@ abstract class BaseTypeLiteral<Eq> extends BaseType {
 
 }
 
-// help :'
+/**
+ * yeah, this will need to be done differently ifever trying to have
+ * used-defined types to extend the typing system...
+ */
 type Ctors
   = typeof TypeNil
   | typeof TypeBoolean
@@ -56,6 +66,13 @@ type Ctors
   | typeof TypeLiteralString
   ;
 
+/**
+ * this is the class to use to create a typing information
+ * 
+ * it also acts as a wrapper around this typing information (which is
+ * accessible with `itself` and `as`) this is to add a layer of indirection
+ * (allows mutating a type in-place and keep every references valides)
+ */
 export class Type {
 
   private static _lastId = 0;
@@ -66,7 +83,9 @@ export class Type {
 
   private constructor() { }
 
+  /** checks if the type itself is instance of given parameter, if not returns `undefined` */
   public as<Z extends Ctors>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
+  /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
   public toString() { return `Type@_id${this._id}`; }
@@ -177,18 +196,26 @@ export class TypeTable extends BaseType {
   private fields: Record<string, VarInfo> = {};
   private indices: Array<VarInfo> = [];
 
+  /** set an entry of known (string) name */
   public setField(field: string, type: VarInfo) {
     this.fields[field] = type;
   }
 
+  /** get an entry of known (string) name */
   public getField(field: string): VarInfo {
     return this.fields[field] ?? Type.noType();
   }
 
+  // XXX: not sure the setIndex/getIndex methods make sense
+  // may be more appropriate for a tuple type; here would rather
+  // have a setTyped/getTyped with the type being 'number' or something...
+
+  /** set an entry of known (numeric) index */
   public setIndex(index: number, type: VarInfo) {
     this.indices[index] = type;
   }
 
+  /** get an entry of known (numeric) index */
   public getIndex(index: number): VarInfo {
     return this.indices[index] ?? Type.noType();
   }
@@ -240,14 +267,24 @@ export class TypeFunction extends BaseType {
     this.parameters = names.map(name => [name, { type: Type.Some(name) }]);
   }
 
+  /** get the parameters info */
   public getParameters() {
     return this.parameters;
   }
 
+  /** update the returns (tuple) info */
   public setReturns(infos: VarInfo[]) {
     this.returns = infos;
   }
 
+  /**
+   * get the returns (tuple) info
+   * 
+   * if `applying` is provided, first resolves the info
+   * as if the function was called with these as parameters
+   * 
+   * @param applying info for the parameters of the (Lua) function
+   */
   public getReturns(applying?: VarInfo[]): VarInfo[] {
     if (!applying) return this.returns;
 
@@ -316,6 +353,13 @@ export class TypeFunction extends BaseType {
 
 }
 
+/**
+ * represents a yet-unknown type, especially a function's parameters,
+ * to which one (or more) operations are performed
+ * 
+ * using the `actsAs` method enables resolving to what it would be if
+ * the type `acts` as was applied the operations `done` to `this`
+ */
 export class TypeSome extends BaseType {
 
   private acts?: VarInfo;
@@ -323,19 +367,19 @@ export class TypeSome extends BaseType {
 
   public constructor(outself: Type, private from?: string) { super(outself); }
 
-  // in-place applied (the type is modified)
+  /** in-place applied (the type is modified) */
   public setApplied<T extends any[]>(operation: TypeSomeOp<T>) {
     if (this.done) this.done.then(operation);
     else this.done = operation;
   }
 
-  // not in-place applied (a new type is created)
+  /** not in-place applied (a new type is created) */
   public getApplied<T extends any[]>(operation: TypeSomeOp<T>) {
     //const repr = this.from && operation.represent(this.from);
     const r = { type: Type.Some() };
     const someType = r.type.as(TypeSome)!;
 
-    // "acts as `this` with `operation` done on it"
+    // "acts as `this` with `operation` `done` on it"
     someType.acts = { type: this.outself }; // XXX: doc gap
     someType.done = operation;
 
@@ -381,6 +425,7 @@ export class TypeSome extends BaseType {
 
 }
 
+// TODO: properly
 export class TypeUnion extends BaseType {
 
   public constructor(outself: Type,
@@ -400,6 +445,7 @@ export class TypeUnion extends BaseType {
 
 }
 
+// TODO: properly
 export class TypeIntersection extends BaseType {
 
   public constructor(outself: Type,
@@ -419,3 +465,8 @@ export class TypeIntersection extends BaseType {
 
 }
 
+// { a: boolean } | { b: number } more or less = { a?: boolean, b?: number } (only 1 of them can diverge)
+// { b: number } & { c: string } == { b: number, c: string }
+
+// { a: boolean } | { a: number } == { a: boolean | number }
+// { a: number } & { a: string } == { a: number & string } (ie never)

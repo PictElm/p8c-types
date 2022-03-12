@@ -8,15 +8,26 @@ class Description {
   private readonly tags: Record<string, string[]> = {};
   private readonly text: Array<string> = [];
 
+  /**
+   * push a tag (eg. `@example` or `@deprecated`)
+   * 
+   * recognized tags should not be pushed here, but fully handled elswhere
+   */
   public pushTag(tag: string, text: string) {
     const it = this.tags[tag] ?? (this.tags[tag] = []);
     it.push(text);
   }
 
+  /**
+   * push arbitrary text
+   */
   public pushText(text: string) {
     this.text.push(text);
   }
 
+  /**
+   * @todo TODO: properly formated (use markdown whenever)
+   */
   public toString() {
     return [
       ...this.text,
@@ -29,6 +40,13 @@ class Description {
 
 }
 
+/**
+ * metadata for a variable, consists of
+ *  - an optional, user-provided type
+ *  - a description (arbitrary doc string and unknown tags)
+ * 
+ * @see Description
+ */
 export class Metadata {
 
   private static _lastId = 0;
@@ -48,6 +66,9 @@ export class Metadata {
 
 }
 
+/**
+ * used to ease parsing syntaxes `"@" <tag> <...>`
+ */
 class Bidoof {
 
   public constructor(private source: string) { }
@@ -105,6 +126,13 @@ interface DocumentingEvents {
 
 }
 
+/**
+ * gather variable metadata (eg. typing, documentation, ...) from doc comments (3 leading `-`)
+ * 
+ * @emits &lt;tag&gt; when a tag is encountered
+ * @emits 'unknown' when an unknown tag is encountered
+ * @emits 'docmentation' for arbitrary doc string
+ */
 export class Documenting extends TypedEmitter<DocumentingEvents> {
 
   private alias: Record<string, Type> = {};
@@ -112,6 +140,21 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
   private entries: Metadata[] = [];
 
+  /**
+   * find matching documentation for a location
+   * 
+   * looks for documentation on the line above and the same line
+   * 
+   * ```lua
+   * --- this will match for `a`
+   * a = something()
+   * 
+   * b = something() --- this will for `b`
+   * 
+   * c = something()
+   * --- this will not for `c`
+   * ```
+   */
   public matching(location: Location): Metadata | undefined {
     return this
       .entries
@@ -124,6 +167,16 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
       );
   }
 
+  /**
+   * process a doc comment
+   * 
+   * only 1 tag is expected by line of text
+   * 
+   * @param range the range of the ast.Comment node
+   * @param text the comment's `.value` (trailing `-`s stripped)
+   * 
+   * @todo TODO: handle parsing failures gracefully
+   */
   public process(range: Range, text: string) {
     const last = this.entries[this.entries.length-1];
     const following = last?.isFollowUp(range);

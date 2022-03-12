@@ -3,7 +3,10 @@ import { readFileSync } from 'fs';
 import { ast } from 'pico8parse';
 import { log } from './logging';
 
-/** immutable */
+/**
+ * @todo TODO: this class will aim at easing parsing multiple documents, 
+ * especially when one depends on others (eg. `include`-like or `require`-like)
+ */
 export class Document {
 
   public readonly range: Range;
@@ -36,7 +39,11 @@ export class Document {
 
 }
 
-/** immutable */
+/**
+ * represents a location withing a document ([&lt;uri> ":"] &lt;line> ":" &lt;character>)
+ * 
+ * it is immutable
+ */
 export class Location {
 
   public constructor(
@@ -46,9 +53,10 @@ export class Location {
   ) { }
 
   /**
-   * - &lt;0 when `this` before `mate`
-   * - &gt;0 when `this` after `mate`
-   * - =0 otherwise
+   * compares two locations:
+   *  - &lt;0 when `this` before `mate`
+   *  - &gt;0 when `this` after `mate`
+   *  - =0 otherwise
    */
   public compare(mate: Location) {
     const lineDiff = this.line - mate.line;
@@ -67,13 +75,20 @@ export class Location {
     return new Location(a.end.line, a.end.column, Document.current.uri);
   }
 
+  /** new location at the beginning of the current document */
   public static beginning() {
     return Document.current.range.start;
   }
+
+  /** new location at the end of the current document */
   public static ending() {
     return Document.current.range.end;
   }
 
+  /**
+   * &lt;file>:&lt;line>:&lt;character>
+   * @param hideUri only return &lt;line>:&lt;character>
+   */
   public toString(hideUri?: boolean): string {
     return hideUri
       ? `${this.line}:${this.character}`
@@ -82,7 +97,11 @@ export class Location {
 
 }
 
-/** immutable */
+/**
+ * represents a range within a document (from a start location to an end location)
+ * 
+ * it is immutable
+ */
 export class Range {
 
   public constructor(
@@ -94,12 +113,21 @@ export class Range {
     return this.start.compare(location) <= 0 && 0 < this.end.compare(location);
   }
 
-  public static emptyRange() { return new Range(null!, null!); }
+  /**
+   * creates an empty range (from 0:0 to 0:0) to be used as placeholder only
+   */
+  public static emptyRange() {
+    return new Range(new Location(0, 0), new Location(0, 0));
+  }
 
   public static fromNode(node: ast.Node) {
     return new Range(Location.fromNodeStart(node), Location.fromNodeEnd(node));
   }
 
+  /**
+   * &lt;start location>&lt;separator>&lt;end location>
+   * @see Location.toString
+   */
   public toString(separator: string = " - ", hideUri: boolean): string {
     return this.start.toString(hideUri) + separator + this.end.toString(hideUri);
   }

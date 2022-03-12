@@ -5,8 +5,14 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { Type } from './typing';
 
+/** describes a variable within a scope */
 export type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
 
+/**
+ * `variable` uses Object.create and prototype inheritance to
+ * have variables of enclosing scopes visible and updatable from
+ * children scopes
+ */
 class Scope {
 
   private static _lastId = 0;
@@ -19,6 +25,24 @@ class Scope {
     this.variables = Object.create(parent?.variables ?? null);
   }
 
+  /**
+   * @todo TODO: this will be removed soon
+   * 
+   * thining about it:
+   *  - when a variable from a parent scope is edited,
+   *    changes are already done to the right object
+   *  - when a variable is edited for the local scope,
+   *    it will never need to be "merged" with parent scopes'
+   *  - when a global variable is edited, the changes are
+   *    applied to the global scope (setGlobale/getGlobal)
+   * 
+   * the new approach will be to have a `scope.updateStrategy`
+   * of sort that will handle editing a variable's info
+   *  - the scope of a 'DoStatement' can simply set a type
+   *  - an 'IfStatement' may want to update type to be an union
+   * 
+   * (this may require an additional parameter to set/get, idk)
+   */
   public mergeInfo(from: Scope, override: boolean) {
     for (const name in from.variables) {
       const old = this.variables[name];
@@ -46,10 +70,22 @@ class Scope {
 
   public toString() { return `Scope@_id${this._id}`; }
 
+  /**
+   * creates a new scope that inherits the variables of its parent
+   * 
+   * (this also simulates closures, for anywhen function side-effect are attempt of implemented in)
+   */
   public static makeFrom(parent: Scope) {
     return new Scope(parent);
   }
 
+  /**
+   * makes the global scope
+   * 
+   * @todo remark: the Chunk creates a new scope this 'global' scope is parent of...
+   * this may lead to mistakes/discrepancies if ever trying to edit what is though
+   * as being the Chunk's scope... maybe not
+   */
   public static makeGlobal() {
     const r = new Scope();
     r.open(Location.beginning());
@@ -59,22 +95,32 @@ class Scope {
 
 }
 
+/** the various types of context */
 namespace Context {
 
   abstract class Base<Tag extends string> {
     protected constructor(public readonly tag: Tag) { }
   }
 
+  /**
+   * with this context type, a 'ReturnStatement' can update a function's
+   * return type (same will be for eg. `yield` calls)
+   */
   export class Function extends Base<'Function'> {
-    // Type and not TypeFunction because it can be mutated into a TypeThread
     public constructor(public readonly theFunction: Type) { super('Function'); }
   }
+
+  /**
+   * will probably be needed for the `self`? maybe not actually...
+   */
   export class Table extends Base<'Table'> {
     public constructor(public readonly theTable: Type) { super('Table'); }
   }
+
   export class Do extends Base<'Do'> {
     public constructor() { super('Do'); }
   }
+
   export class While extends Base<'While'> {
     public constructor() { super('While'); }
   }
@@ -84,6 +130,7 @@ namespace Context {
 type ContextKind = keyof typeof Context;
 type ContextType<T extends ContextKind> = InstanceType<typeof Context[T]>;
 
+/** for use with the 'locate' Scoping event */
 export enum LocateReason {
   Text = 1,
   Read = 2,
@@ -98,6 +145,11 @@ interface ScopingEvents {
   'locate': (range: Range, name: string, variable: VarInfo, reason: LocateReason) => void;
 }
 
+/**
+ * @emits 'fork'|'join' for scope operations
+ * @emits 'pushContext'|'popContext' for context operations
+ * @emits 'locates' when a word is located within the document
+ */
 export class Scoping extends TypedEmitter<ScopingEvents> {
 
   private readonly global = Scope.makeGlobal();
@@ -107,6 +159,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
 
   private readonly contexts: { [T in ContextKind]?: ContextType<T>[] } = {};
 
+  /** opens a new local scope inheriting from the current scope */
   public fork(location: Location) {
     this.local = Scope.makeFrom(this.local);
     this.local.open(location);
@@ -115,6 +168,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.scopes.push(this.local);
   }
 
+  /** closes the current local scope and reverts to its parent */
   public join(location: Location, merge: boolean, overrideTypes?: boolean) {
     assert(this.local.parent, "Scoping.join: trying to one too many scope");
     this.emit('join', location, this.local);
@@ -124,6 +178,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.local = this.local.parent;
   }
 
+  /** pushes to the relevant context stack */
   public pushContext<T extends ContextKind>(location: Location, tag: T, ...args: ConstructorParameters<typeof Context[T]>) {
     const context = new (Context[tag] as any)(...args) as ContextType<T>; // YYY: craps the bed otherwise
     if (!this.contexts[tag]) this.contexts[tag] = [];
@@ -132,6 +187,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     this.emit('pushContext', location, context);
   }
 
+  /** searches for the first enclosing context in the relevant context stack */
   public findContext<T extends ContextKind>(tag: T) {
     const it = this.contexts[tag];
     assert(it, `Scoping.findContext: no context were pushed with the tag '${tag}'`);
@@ -139,6 +195,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     return it[it.length-1] as ContextType<T>; // YYY: craps the bed otherwise
   }
 
+  /** pops from the relevant context stack */
   public popContext<T extends ContextKind>(location: Location, tag: T) {
     const it = this.contexts[tag];
     assert(it, `Scoping.popContext: no context were pushed with the tag '${tag}'`);
@@ -171,6 +228,11 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   }
 
   /* istanbul ignore next */
+  /**
+   * get a record of every names (and their info) in the global scope
+   * 
+   * warning: the entries returned should probably be regarded as immutable
+   */
   public getGlobals() {
     const r: Record<string, VarInfo> = {};
 
@@ -181,6 +243,11 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   }
 
   /* istanbul ignore next */
+  /**
+   * get a record of every names (and their info) in the current local scope
+   * 
+   * warning: the entries returned should probably be regarded as immutable
+   */
   public getLocals() {
     const r: Record<string, VarInfo> = {};
 

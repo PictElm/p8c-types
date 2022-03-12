@@ -2,6 +2,14 @@ import assert from 'assert';
 import { VarInfo } from './scoping';
 import { Resolved, Type, TypeFunction, TypeTable } from './typing';
 
+/**
+ * represents an operation performed on an unknown type
+ * 
+ * for now, the operations this models are the metamethodes
+ * 
+ * @todo TODO: same as Handling.handlers, would like it refactored
+ * so it can easily be augmented/adapted for new kinds of usages
+ */
 export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
   protected args: T;
@@ -143,6 +151,7 @@ export abstract class TypeSomeOp<T extends any[] = unknown[]> {
 
   }
 
+  // XXX: see todo above class, this may be moved outside, to be implemented as a specific usage
   public static __metatable = class __metatable extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
   public static __ipairs = class __ipairs extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
   public static __pairs = class __pairs extends TypeSomeOp<unknown[]> { } // YYY: not implemented yet
