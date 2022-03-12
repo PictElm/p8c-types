@@ -3,6 +3,7 @@ import { Documenting } from './documenting';
 import { Handling } from './handling';
 import { Document, Range } from './locating';
 import { log } from './logging';
+import { parseType } from './parsing';
 import { LocateReason, Scoping, VarInfo } from './scoping';
 
 const options: Partial<Options> = {
@@ -19,6 +20,11 @@ function indentation() {
 }
 
 function main(args: string[]) {
+  const stt = { index: 0 };
+  const res = parseType("(p: Potato) ~* some kind of cool coroutine", stt);
+  log.event(res);
+  log.event(stt);
+  return;
   // log.level = 'none';
 
   const src = `
