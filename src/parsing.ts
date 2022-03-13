@@ -1,4 +1,4 @@
-import { Type, TypeTable } from './typing';
+import { Type, TypeAlias, TypeFunction, TypeTable, TypeThread, TypeTuple, TypeVararg } from './typing';
 
 /**
  * tries to parse a type a the beginning of `source`
@@ -25,12 +25,12 @@ enum Types {
   ALIAS = 48,
 }
 
-type Token = { type: Types, value: string | number | boolean | null };
+type Token = { type: Types, value: string | number | boolean };
 
 export class Parser {
 
-  protected token: Token | undefined;
-  protected previousIndex: number = this.state.index;
+  protected token: Token = { type: Types.OTHER, value: "<dne>" };
+  protected previousIndex = this.state.index;
 
   /**
    * ```bnf
@@ -39,7 +39,7 @@ export class Parser {
    * <table> ::= "{" {(<name> | "[" <name> ":" <simple> "]") ":" <type> ","} "}"
    * 
    * <tuple> ::= "[" {<type> ","} "]"
-   * <params> ::= "(" {<name> ":" <type> ","} ["..." [":" <type>]] ")"
+   * <params> ::= "(" {<name> ":" <type> ","} ["..." [":" <tuple>]] ")"
    * 
    * <function> ::= <params> "->" <tuple>
    * <thread> ::= <params> {"~>" <params>} "~*"
@@ -72,7 +72,6 @@ export class Parser {
   }
 
   protected parse(canUnion: boolean): Type | never {
-    if (!this.token) throw new Parser.SyntaxError("expected <type>");
     let type: Type | undefined = undefined;
 
     if (Types.SIMPLE === this.token.type) {
@@ -115,7 +114,7 @@ export class Parser {
             this.next();
 
             // <name> ":" <type>
-            if (Types.ALIAS === this.token?.type) {
+            if (Types.ALIAS === this.token.type) {
               const name = this.token.value;
 
               this.next();
@@ -126,17 +125,17 @@ export class Parser {
             }
 
             // "[" <name> ":" <simple> "]" ":" <type>
-            else if ("[" === this.token?.value) {
+            else if ("[" === this.token.value) {
               this.next();
 
-              if (Types.ALIAS !== this.token?.type) this.expected(["<name>"]);
+              if (Types.ALIAS !== this.token.type) this.expected(["<name>"]);
               const name = this.token.value;
 
               // ":" <simple> ...
               this.next();
               this.expect(":");
               this.next();
-              if (Types.SIMPLE !== this.token?.type) this.expected(["<simple>"]);
+              if (Types.SIMPLE !== this.token.type) this.expected(["<simple>"]);
 
               // ... "]" ":" <type>
               this.next();
@@ -149,7 +148,7 @@ export class Parser {
               asTable.setField(`[${name ?? ""}: ${this.token.value}]`, { type: this.parse(true) });
             }
 
-          } while ("," === this.token?.value);
+          } while ("," === this.token.value);
 
           this.expect("}");
         } break;
@@ -160,10 +159,10 @@ export class Parser {
           do { // while ","
 
             this.next();
-            if ("]" !== this.token?.value)
+            if ("]" !== this.token.value)
               types.push(this.parse(true));
 
-          } while ("," === this.token?.value);
+          } while ("," === this.token.value);
 
           type = Type.Tuple(types);
 
@@ -171,15 +170,144 @@ export class Parser {
         } break;
 
         case "(": { // function, thread or parenthesized expression
+          // <function> ::= <params-list> ...
+          // <thread> ::= <params-list> ...
+          // <parent-expr> ::= <type>
+          // <params-list> ::= {<name> ":" <type> ","} ["..." [":" <type>]]
 
-          // TODO
+          let mayType: Type | undefined;
+          let asAlias: TypeAlias | undefined;
 
-          this.expect(")");
+          this.next();
+          if (")" !== this.token.value && "..." !== this.token.value) {
+            // <name> ":" <type> | "..." [":" <tuple>] | <type>
+            mayType = this.parse(true);
+            asAlias = mayType.as(TypeAlias);
+          }
+
+          const value = this.token.value;
+          // ":" <type> | [":" <tuple>]
+          if ((")" === value && !mayType) || "..." === value || (asAlias && ":" === this.token.value)) {
+            let wasName = asAlias?.alias;
+            const signatures: [names: string[], types: Type[], vararg: Type | null][] = [];
+
+            do { // "~>"
+
+              let names: string[] = [];
+              let types: Type[] = [];
+              let vararg: Type | null = !wasName && ")" !== this.token.value
+                ? Type.Vararg()
+                : null;
+
+              while (")" !== this.token.value) {
+
+                // <name> ":" <type>
+                if (wasName) {
+                  this.expect(":");
+                  names.push(wasName);
+                  this.next();
+                  types.push(this.parse(true));
+                }
+
+                // "..." [":" <tuple>]
+                else {
+                  this.next();
+
+                  if (":" === this.token.value) {
+                    this.next();
+                    const shouldTuple = this.parse(true);
+                    if (!(shouldTuple.itself instanceof TypeTuple))
+                      this.expected(["<tuple>"], "a " + shouldTuple.itself.constructor.name);
+
+                    // vararg.as(TypeVararg)!.setTypes(shouldTuple); // XXX: need something like that
+                  }
+
+                  // ")"
+                  break;
+                }
+
+                // "," (<name> ":" <type> | "..." [":" <tuple>])
+                if ("," === this.token.value) {
+                  this.next();
+                  const value = this.token.value as string; // otherwise inferred as type `","`
+
+                  wasName = Types.ALIAS === this.token.type
+                    ? value
+                    : "..." === value
+                      ? undefined
+                      : this.expected(["<name>", "..."]);
+                  // <name> ":"
+                  if (wasName) this.next();
+                }
+
+              } // ")" !=
+
+              // ")" ("->" <type> | "~>" ... | "~*")
+              this.expect(")");
+              signatures.push([names, types, vararg]);
+
+              // "->" <type> | "~*"
+              this.next();
+              if ("->" === this.token.value || "~*" === this.token.value)
+                break;
+
+              // "~>" "(" <param-list> ")"
+              this.expect("~>");
+              this.next();
+              this.expect("(")
+
+              // <name> ":" <type> | "..." [":" <tuple>]
+              this.next();
+              const value = this.token.value;
+
+              if (")" !== value) {
+                wasName = Types.ALIAS === this.token.type
+                  ? value as string
+                  : "..." === value
+                    ? undefined
+                    : this.expected(["<name>", "..."]);
+                // <name> ":"
+                if (wasName) this.next();
+              }
+
+            } while (true);
+
+            // "->" <tuple>
+            if ("->" === this.token.value && 1 === signatures.length) {
+              this.next();
+              const shouldTuple = this.parse(true);
+              if (!(shouldTuple.itself instanceof TypeTuple))
+                this.expected(["<tuple>"], "a " + shouldTuple.itself.constructor.name);
+
+              type = Type.Function(signatures[0][0].map(it => it[0]));
+              const asFunction = type.as(TypeFunction)!;
+
+              // asFunction.setParameters(types); // XXX: need something like that
+              // asFunction.setReturns(shouldTuple); // XXX: need something like that
+            }
+
+            // "~*"
+            else if ("~*" === this.token.value) {
+              type = Type.Thread();
+              const asThread = type.as(TypeThread);
+
+              for (let k = 0; k < signatures.length; k++)
+                ; // asThread.pushSignature(names[k], types[k]); // XXX: need something like that
+            }
+
+            else this.expected(1 === signatures.length ? ["->", "~>", "~*"] : ["~>", "~*"]);
+          }
+
+          // <type>
+          else {
+            type = mayType!;
+            this.expect(")");
+          }
         } break;
 
         case "<": { // typeof
           this.next();
-          if (Types.ALIAS !== this.token?.type) this.expected(["<name>"]);
+          if (Types.ALIAS !== this.token.type) this.expected(["<name>"]);
 
           type = Type.Some(`${this.token.value}`);
           this.next();
@@ -191,25 +319,22 @@ export class Parser {
       }
     }
 
-    else throw new Parser.SyntaxError(this.token ? `unexpected "${this.token?.value}"` : "unexpected nothing");
-    if (!type) throw new Error("probably unreachable");
+    else throw new Parser.SyntaxError(`unexpected "${this.token.value}"`);
 
     this.next();
 
     // "&" <type>
-    if ("&" === this.token?.value) {
+    if ("&" === this.token.value) {
       this.next();
-      // probably rather try/bail than throw if next is not a type
       type = Type.Intersection(type, this.parse(false));
 
       // this.next();
     }
 
     // "|" <type>
-    if (canUnion && "|" === this.token?.value) {
+    if (canUnion && "|" === this.token.value) {
       this.next();
-      // probably rather try/bail than throw if next is not a type
-      type = Type.Union(type, this.parse(false));
+      type = Type.Union(type, this.parse(true));
     }
 
     return type;
@@ -226,14 +351,14 @@ export class Parser {
     this.token = this.lex();
   }
 
-  protected expected(any: string[], got?: string) {
+  protected expected(any: string[], got?: string): never {
     const a = 1 === any.length ? any[0] : `one of ${any.join(", ")}`;
-    const b = got || this.token ? `"${got ?? this.token?.value}"` : "nothing";
+    const b = `"${got ?? this.token.value}"`;
     throw new Parser.SyntaxError(`expected ${a}; got ${b}`);
   }
 
   protected expect(value: string) {
-    if (value !== this.token?.value) this.expected([`"${value}"`]);
+    if (value !== this.token.value) this.expected([`"${value}"`]);
   }
 
   protected lex(): Token {

@@ -3,7 +3,7 @@ import { Documenting } from './documenting';
 import { Handling } from './handling';
 import { Document, Range } from './locating';
 import { log } from './logging';
-import { parseType } from './parsing';
+import { Parser } from './parsing';
 import { LocateReason, Scoping, VarInfo } from './scoping';
 
 const options: Partial<Options> = {
@@ -20,11 +20,17 @@ function indentation() {
 }
 
 function main(args: string[]) {
-  const stt = { index: 0 };
-  const str = "[a, b, c] some kind of cool type";
-  const res = parseType(str, stt);
-  log.event(JSON.parse(JSON.stringify(res)));
-  log.event(str.slice(stt.index));
+  try {
+    const stt = { index: 0 };
+    const str = "(p: <p>) -> [<p>] some kind of cool type";
+    const res = Parser.parseType(str, stt); //parseType(str, stt);
+    log.event(res && JSON.parse(JSON.stringify(res)));
+    log.event(str.slice(stt.index));
+  } catch (err) {
+    if (err instanceof Parser.SyntaxError)
+      log.event(err.message);
+    else throw err;
+  }
   return;
   // log.level = 'none';
 

@@ -537,7 +537,7 @@ export class TypeIntersection extends BaseType {
 export class TypeAlias extends BaseType {
 
   public constructor(outself: Type,
-    private alias: string
+    public readonly alias: string
   ) { super(outself); }
 
   public override toString() {
