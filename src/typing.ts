@@ -15,6 +15,7 @@ abstract class BaseType {
   public constructor (protected readonly outself: Type) { }
 
   public abstract toString(): string;
+  public abstract toJSON(key: string): any;
   public abstract resolved(): Resolved;
 
   protected static mark(type: Type) {
@@ -36,7 +37,7 @@ abstract class BaseTypeLiteral<Eq> extends BaseType {
   ) { super(outself); }
 
   public setLiterals(literal: Eq) {
-    this.value;
+    this.value = literal;
   }
 
   public getLiterals() {
@@ -54,16 +55,18 @@ type Ctors
   | typeof TypeBoolean
   | typeof TypeNumber
   | typeof TypeString
-  | typeof TypeThread
-  | typeof TypeVararg
-  | typeof TypeTable
-  | typeof TypeFunction
-  | typeof TypeSome
-  | typeof TypeUnion
-  | typeof TypeIntersection
   | typeof TypeLiteralBoolean
   | typeof TypeLiteralNumber
   | typeof TypeLiteralString
+  | typeof TypeTuple
+  | typeof TypeVararg
+  | typeof TypeTable
+  | typeof TypeFunction
+  | typeof TypeThread
+  | typeof TypeSome
+  | typeof TypeUnion
+  | typeof TypeIntersection
+  | typeof TypeAlias
   ;
 
 /**
@@ -89,21 +92,25 @@ export class Type {
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
   public toString() { return `Type@_id${this._id}`; }
+  public toJSON(key: string) { const name = this.itself.constructor.name; return { [name]: this.itself.toJSON(name) } };
 
-  public static Nil() { const r = new Type(); r.mutate(new TypeNil(r)); return r; }
-  public static Boolean() { const r = new Type(); r.mutate(new TypeBoolean(r)); return r; }
-  public static Number() { const r = new Type(); r.mutate(new TypeNumber(r)); return r; }
-  public static String() { const r = new Type(); r.mutate(new TypeString(r)); return r; }
-  public static Thread() { const r = new Type(); r.mutate(new TypeThread(r)); return r; }
-  public static Vararg() { const r = new Type(); r.mutate(new TypeVararg(r)); return r; }
-  public static Table() { const r = new Type(); r.mutate(new TypeTable(r)); return r; }
-  public static Function(names: string[]) { const r = new Type(); r.mutate(new TypeFunction(r, names)); return r; }
-  public static Some(from?: string) { const r = new Type(); r.mutate(new TypeSome(r, from)); return r; }
-  public static Union(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeUnion(r, left, right)); return r; }
+  // XXX: still no
+  public static Nil()                                 { const r = new Type(); r.mutate(new TypeNil(r));                       return r; }
+  public static Boolean()                             { const r = new Type(); r.mutate(new TypeBoolean(r));                   return r; }
+  public static Number()                              { const r = new Type(); r.mutate(new TypeNumber(r));                    return r; }
+  public static String()                              { const r = new Type(); r.mutate(new TypeString(r));                    return r; }
+  public static LiteralBoolean(value: boolean)        { const r = new Type(); r.mutate(new TypeLiteralBoolean(r, value));     return r; }
+  public static LiteralNumber(value: number)          { const r = new Type(); r.mutate(new TypeLiteralNumber(r, value));      return r; }
+  public static LiteralString(value: string)          { const r = new Type(); r.mutate(new TypeLiteralString(r, value));      return r; }
+  public static Tuple(types: Type[])                  { const r = new Type(); r.mutate(new TypeTuple(r, types));              return r; }
+  public static Vararg()                              { const r = new Type(); r.mutate(new TypeVararg(r));                    return r; }
+  public static Table()                               { const r = new Type(); r.mutate(new TypeTable(r));                     return r; }
+  public static Function(names: string[])             { const r = new Type(); r.mutate(new TypeFunction(r, names));           return r; }
+  public static Thread()                              { const r = new Type(); r.mutate(new TypeThread(r));                    return r; }
+  public static Some(from?: string)                   { const r = new Type(); r.mutate(new TypeSome(r, from));                return r; }
+  public static Union(left: Type, right: Type)        { const r = new Type(); r.mutate(new TypeUnion(r, left, right));        return r; }
   public static Intersection(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeIntersection(r, left, right)); return r; }
-  public static LiteralBoolean(value: boolean) { const r = new Type(); r.mutate(new TypeLiteralBoolean(r, value)); return r; }
-  public static LiteralNumber(value: number) { const r = new Type(); r.mutate(new TypeLiteralNumber(r, value)); return r; }
-  public static LiteralString(value: string) { const r = new Type(); r.mutate(new TypeLiteralString(r, value)); return r; }
+  public static Alias(alias: string)                  { const r = new Type(); r.mutate(new TypeAlias(r, alias));              return r; }
 
   public static noType() { return Type.Nil(); } // YYY?
 
@@ -112,6 +119,7 @@ export class Type {
 export class TypeNil extends BaseType {
 
   public override toString() { return "nil"; }
+  public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.Nil()); }
 
 }
@@ -119,6 +127,7 @@ export class TypeNil extends BaseType {
 export class TypeBoolean extends BaseType {
 
   public override toString() { return "boolean"; }
+  public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.Boolean()); }
 
 }
@@ -126,6 +135,7 @@ export class TypeBoolean extends BaseType {
 export class TypeNumber extends BaseType {
 
   public override toString() { return "number"; }
+  public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.Number()); }
 
 }
@@ -133,15 +143,15 @@ export class TypeNumber extends BaseType {
 export class TypeString extends BaseType {
 
   public override toString() { return "string"; }
+  public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.String()); }
 
 }
 
 export class TypeLiteralBoolean extends BaseTypeLiteral<boolean> {
 
-  public override toString() {
-    return this.value.toString();
-  }
+  public override toString() { return this.value.toString(); }
+  public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
     return BaseType.mark(Type.LiteralBoolean(this.value));
@@ -151,9 +161,8 @@ export class TypeLiteralBoolean extends BaseTypeLiteral<boolean> {
 
 export class TypeLiteralNumber extends BaseTypeLiteral<number> {
 
-  public override toString() {
-    return this.value.toFixed(); // TBD or something
-  }
+  public override toString() { return this.value.toString(); }
+  public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
     return BaseType.mark(Type.LiteralNumber(this.value));
@@ -163,9 +172,8 @@ export class TypeLiteralNumber extends BaseTypeLiteral<number> {
 
 export class TypeLiteralString extends BaseTypeLiteral<string> {
 
-  public override toString() {
-    return `'${this.value}'`;
-  }
+  public override toString() { return `'${this.value}'`; }
+  public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
     return BaseType.mark(Type.LiteralString(this.value));
@@ -173,20 +181,32 @@ export class TypeLiteralString extends BaseTypeLiteral<string> {
 
 }
 
-export class TypeThread extends BaseType {
+export class TypeTuple extends BaseType {
 
-  public constructor(outself: Type) { super(outself); throw "not implemented: TypeThread"; }
+  public constructor(outself: Type,
+    private types: Type[]
+  ) { super(outself); }
 
-  public override toString() { return "thread"; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Thread()); }
+  public override toString() {
+    return `[${this.types.map(it => it.itself).join(", ")}]`;
+  }
+
+  public override toJSON() {
+    return this.types.map((it, k) => it.toJSON(k.toString()));
+  }
+
+  public override resolved(): Resolved {
+    return BaseType.mark(Type.Tuple(this.types.map(it => it.itself.resolved())));
+  }
 
 }
 
-export class TypeVararg extends BaseType {
+export class TypeVararg extends BaseType { // TypeTuple
 
   public constructor(outself: Type) { super(outself); throw "not implemented: TypeVararg"; }
 
   public override toString() { return "..."; }
+  public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.Vararg()); }
 
 }
@@ -232,6 +252,13 @@ export class TypeTable extends BaseType {
         r.push(`[${k}]: ${this.indices[k].type.itself}`);
 
     return r.length ? `{ ${r.join(", ")} }` : "{}";
+  }
+
+  public override toJSON() {
+    return {
+      fields: Object.fromEntries(Object.entries(this.fields).map(([k, v]) => [k, v.type.toJSON(k)])),
+      indices: this.indices.map((it, k) => it.type.itself.toJSON(k.toString())),
+    };
   }
 
   public override resolved(): Resolved {
@@ -333,6 +360,13 @@ export class TypeFunction extends BaseType {
     return `(${parameters}) -> [${returns}]`;
   }
 
+  public override toJSON() {
+    return {
+      parameters: this.parameters.map(([k, v]) => [k, v.type.toJSON(k)]),
+      returns: this.returns.map((it, k) => it.type.toJSON(k.toString())),
+    };
+  }
+
   public override resolved(): Resolved {
     const r = Type.Function(this.parameters.map(it => it[0]));
     const functionType = r.as(TypeFunction)!;
@@ -353,6 +387,16 @@ export class TypeFunction extends BaseType {
 
 }
 
+export class TypeThread extends BaseType { // TypeFunction
+
+  public constructor(outself: Type) { super(outself); throw "not implemented: TypeThread"; }
+
+  public override toString() { return "thread"; }
+  public override toJSON() { return "TODO"; }
+  public override resolved(): Resolved { return BaseType.mark(Type.Thread()); }
+
+}
+
 /**
  * represents a yet-unknown type, especially a function's parameters,
  * to which one (or more) operations are performed
@@ -365,7 +409,9 @@ export class TypeSome extends BaseType {
   private acts?: VarInfo;
   private done?: TypeSomeOp;
 
-  public constructor(outself: Type, private from?: string) { super(outself); }
+  public constructor(outself: Type,
+    private from?: string
+  ) { super(outself); }
 
   /** in-place applied (the type is modified) */
   public setApplied<T extends any[]>(operation: TypeSomeOp<T>) {
@@ -409,6 +455,14 @@ export class TypeSome extends BaseType {
     return what.represent(to);
   }
 
+  public override toJSON() {
+    return {
+      acts: this.acts?.type.toJSON('acts'),
+      from: this.from ?? null,
+      done: this.done?.constructor.name ?? null,
+    };
+  }
+
   public override resolved() {
     if (!this.acts) return Type.noType().itself.resolved();
     if (!this.done) return this === this.acts.type.itself
@@ -437,6 +491,13 @@ export class TypeUnion extends BaseType {
     return `${this.left.itself} | ${this.right.itself}`;
   }
 
+  public override toJSON() {
+    return {
+      left: this.left,
+      right: this.right,
+    };
+  }
+
   public override resolved(): Resolved {
     return this.left.itself.constructor === this.right.itself.constructor
       ? this.left.itself.resolved()
@@ -457,10 +518,40 @@ export class TypeIntersection extends BaseType {
     return `${this.left.itself} & ${this.right.itself}`;
   }
 
+  public override toJSON() {
+    return {
+      left: this.left,
+      right: this.right,
+    };
+  }
+
   public override resolved(): Resolved {
     return this.left.itself.constructor === this.right.itself.constructor
       ? this.left.itself.resolved()
       : Type.noType().itself.resolved(); // XXX: absolutely not
+  }
+
+}
+
+// TODO: alias types registry
+export class TypeAlias extends BaseType {
+
+  public constructor(outself: Type,
+    private alias: string
+  ) { super(outself); }
+
+  public override toString() {
+    return this.alias;
+  }
+
+  public override toJSON() {
+    return {
+      alias: this.alias,
+    };
+  }
+
+  public override resolved() {
+    return Type.noType().itself.resolved(); // XXX: absolutely not
   }
 
 }

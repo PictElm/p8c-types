@@ -21,9 +21,10 @@ function indentation() {
 
 function main(args: string[]) {
   const stt = { index: 0 };
-  const res = parseType("(p: Potato) ~* some kind of cool coroutine", stt);
-  log.event(res);
-  log.event(stt);
+  const str = "[a, b, c] some kind of cool type";
+  const res = parseType(str, stt);
+  log.event(JSON.parse(JSON.stringify(res)));
+  log.event(str.slice(stt.index));
   return;
   // log.level = 'none';
 
