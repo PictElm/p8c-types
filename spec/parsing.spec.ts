@@ -34,7 +34,7 @@ describe("parses tables", () => {
 describe("parses functions", () => {
 
   it("functions", () => {
-    expectCommon(parseType("() -> []"), Type.make(TypeFunction, []));
+    expectCommon(parseType("() -> []"), Type.make(TypeFunction, { names: [], infos: [], vararg: null }));
   });
 
 });

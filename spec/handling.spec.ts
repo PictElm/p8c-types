@@ -5,7 +5,7 @@ import { Scoping, VarInfo } from '../src/scoping';
 import { Documenting } from '../src/documenting';
 import { Handling } from '../src/handling';
 import { Document } from '../src/locating';
-import { TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable } from '../src/typing';
+import { TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable, TypeVararg } from '../src/typing';
 import { log } from '../src/logging';
 
 log.level = 'none';
@@ -139,7 +139,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    const parameters = asFunction.getParameters();
+
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expect(parameters.vararg).to.be.null;
+
     expectLength(asFunction.getReturns(), 0, "return");
   });
 
@@ -150,7 +155,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    const parameters = asFunction.getParameters();
+
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expect(parameters.vararg).to.be.null;
+
     expectLength(asFunction.getReturns(), 0, "return");
   });
 
@@ -163,9 +173,12 @@ describe("handles function", async () => {
     const asFunction = info.type.as(TypeFunction)!;
     const parameters = asFunction.getParameters();
 
-    expectLength(parameters, 1, "parameter");
-    expect(parameters[0][0]).to.be.string("p");
-    expectVarInfoType(parameters[0][1], TypeSome, "the parameter");
+    expectLength(parameters.names, 1, "parameter name");
+    expectLength(parameters.infos, 1, "parameter info");
+    expect(parameters.vararg).to.be.null;
+
+    expect(parameters.names[0]).to.be.string("p");
+    expectVarInfoType(parameters.infos[0], TypeSome, "the parameter p");
 
     expectLength(asFunction.getReturns(), 0, "return");
   });
@@ -177,9 +190,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
-    // XXX!
+    const parameters = asFunction.getParameters();
 
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expectVarInfoType(parameters.vararg!, TypeVararg, "vararg");
+
     expectLength(asFunction.getReturns(), 0, "return");
   });
 
@@ -190,9 +206,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
+    const parameters = asFunction.getParameters();
     const returns = asFunction.getReturns();
 
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expect(parameters.vararg).to.be.null;
 
     expectLength(returns, 0, "return");
   });
@@ -204,9 +223,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
+    const parameters = asFunction.getParameters();
     const returns = asFunction.getReturns();
 
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expect(parameters.vararg).to.be.null;
 
     expectLength(returns, 1, "return");
     expectVarInfoType(returns[0], TypeNumber, "the return");
@@ -219,9 +241,12 @@ describe("handles function", async () => {
     expectVarInfoType(info, TypeFunction);
 
     const asFunction = info.type.as(TypeFunction)!;
+    const parameters = asFunction.getParameters();
     const returns = asFunction.getReturns();
 
-    expectLength(asFunction.getParameters(), 0, "parameter");
+    expectLength(parameters.names, 0, "parameter name");
+    expectLength(parameters.infos, 0, "parameter info");
+    expect(parameters.vararg).to.be.null;
 
     expectLength(returns, 2, "return");
     expectVarInfoType(returns[0], TypeNumber, "first return");
@@ -238,9 +263,12 @@ describe("handles function", async () => {
     const parameters = asFunction.getParameters();
     const returns = asFunction.getReturns();
 
-    expectLength(parameters, 1, "parameter");
-    expect(parameters[0][0]).to.be.string("p");
-    expectVarInfoType(parameters[0][1], TypeSome, "the parameter");
+    expectLength(parameters.names, 1, "parameter name");
+    expectLength(parameters.infos, 1, "parameter info");
+    expect(parameters.vararg).to.be.null;
+
+    expect(parameters.names[0]).to.be.string("p");
+    expectVarInfoType(parameters.infos[0], TypeSome, "the parameter");
 
     expectLength(returns, 1, "return");
     expectVarInfoType(returns[0], TypeSome, "the return");

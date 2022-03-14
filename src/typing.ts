@@ -151,8 +151,12 @@ export class TypeLiteralString extends BaseTypeLiteral<string> {
 export class TypeTuple extends BaseType {
 
   public constructor(outself: Type,
-    private types: Type[]
+    protected readonly types: Type[]
   ) { super(outself); }
+
+  public getTypes() {
+    return this.types;
+  }
 
   public override toString() {
     return `[${this.types.map(it => it.itself).join(", ")}]`;
@@ -168,13 +172,19 @@ export class TypeTuple extends BaseType {
 
 }
 
-export class TypeVararg extends BaseType { // TypeTuple
+export class TypeVararg extends TypeTuple {
 
-  public constructor(outself: Type) { super(outself); throw "not implemented: TypeVararg"; }
+  public constructor(outself: Type, types?: Type[]) { super(outself, types ?? []); }
 
-  public override toString() { return "..."; }
-  public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeVararg)); }
+  public override toString() {
+    return this.types.length
+      ? `...: ${super.toString()}`
+      : "...";
+  }
+
+  public override resolved(): Resolved {
+    return BaseType.mark(Type.make(TypeVararg, this.types));
+  }
 
 }
 
@@ -253,13 +263,11 @@ export class TypeTable extends BaseType {
 
 export class TypeFunction extends BaseType {
 
-  private returns: VarInfo[] = [];
-  private parameters: [name: string, type: VarInfo][];
+  protected returns: VarInfo[] = [];
 
-  public constructor(outself: Type, names: string[]) {
-    super(outself);
-    this.parameters = names.map(name => [name, { type: Type.make(TypeSome, name) }]);
-  }
+  public constructor(outself: Type,
+    protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
+  ) { super(outself); }
 
   /** get the parameters info */
   public getParameters() {
@@ -284,7 +292,7 @@ export class TypeFunction extends BaseType {
 
     const toRevert: TypeSome[] = [];
 
-    this.parameters.forEach(([_, info], k) => {
+    this.parameters.infos.forEach((info, k) => {
       if (info.type.itself instanceof TypeSome) {
         toRevert.push(info.type.itself);
         info.type.itself.actsAs(applying[k]);
@@ -303,14 +311,15 @@ export class TypeFunction extends BaseType {
 
   public override toString() {
     const parameters = this.parameters
-      .map(([name, info]) => `${name}: ${info.type.itself}`)
+      .names
+      .map((name, k) => `${name}: ${this.parameters.infos[k].type.itself}`)
       .join(", ");
 
     let returns: string = "";
     if (this.returns.length) {
       const toRevert: TypeSome[] = [];
 
-      this.parameters.forEach(([_, info]) => {
+      this.parameters.infos.forEach(info => {
         if (info.type.itself instanceof TypeSome) {
           toRevert.push(info.type.itself);
           info.type.itself.actsAs(info);
@@ -329,18 +338,21 @@ export class TypeFunction extends BaseType {
 
   public override toJSON() {
     return {
-      parameters: this.parameters.map(([k, v]) => [k, v.type.toJSON(k)]),
+      parameters: {
+        names: this.parameters.names,
+        types: this.parameters.infos.map((it, k) => it.type.toJSON(this.parameters.names[k])),
+      },
       returns: this.returns.map((it, k) => it.type.toJSON(k.toString())),
     };
   }
 
   public override resolved(): Resolved {
-    const r = Type.make(TypeFunction, this.parameters.map(it => it[0]));
+    const r = Type.make(TypeFunction, this.parameters);
     const functionType = r.as(TypeFunction)!;
 
     const returns = this.returns.map(ret => {
-      const k = this.parameters.findIndex(par => par[1] === ret);
-      if (-1 < k) return functionType.parameters[k][1]; // ret itself _is_ a param of this
+      const k = this.parameters.infos.findIndex(par => par === ret);
+      if (-1 < k) return functionType.parameters.infos[k]; // ret itself _is_ a param of this
 
       throw "hey"; // XXX/TODO/FIXME/...: find a way to trigger that
       // summary:
@@ -354,13 +366,45 @@ export class TypeFunction extends BaseType {
 
 }
 
-export class TypeThread extends BaseType { // TypeFunction
+export class TypeThread extends TypeFunction {
 
-  public constructor(outself: Type) { super(outself); throw "not implemented: TypeThread"; }
+  private created: boolean = false; // YYY when set create, no longer extends TypeFunction..?!
+  private signatures: TypeFunction['parameters'][];
+
+  public constructor(outself: Type,
+    parameters: TypeFunction['parameters'],
+    ...following: TypeFunction['parameters'][]
+  ) {
+    super(outself, parameters);
+    this.signatures = following;
+  }
+
+  public setNextSignature(signature: TypeFunction['parameters']) {
+    this.signatures.push(signature);
+  }
+
+  public getNextSignature(): TypeThread {
+    const parameters = this.signatures[0] ?? this.parameters;
+    const rest = this.signatures.slice(1);
+    return Type.make(TypeThread, parameters, ...rest).itself as TypeThread; // XXX
+  }
 
   public override toString() { return "thread"; }
-  public override toJSON() { return "TODO"; }
-  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeThread)); }
+
+  public override toJSON(): any {
+    return {
+      signatures: [this.parameters, ...this.signatures].map(parameters => ({
+        parameters: {
+          names: parameters.names,
+          types: parameters.infos.map((it, k) => it.type.toJSON(parameters.names[k])),
+        },
+      }))
+    };
+  }
+
+  public override resolved(): Resolved {
+    return BaseType.mark(Type.make(TypeThread, this.signatures[0], ...this.signatures.slice(1)));
+  }
 
 }
 
@@ -408,7 +452,7 @@ export class TypeSome extends BaseType {
     this.acts = undefined;
   }
 
-  public override toString() {
+  public override toString(): string {
     if (!this.acts) return `<${this.from ?? "?"}>`;
     if (!this.done) return this === this.acts.type.itself
         ? `<${this.from ?? "?"}>`
@@ -430,7 +474,7 @@ export class TypeSome extends BaseType {
     };
   }
 
-  public override resolved() {
+  public override resolved(): Resolved {
     if (!this.acts) return Type.noType().itself.resolved();
     if (!this.done) return this === this.acts.type.itself
         ? BaseType.mark(this.outself)
@@ -505,6 +549,7 @@ export class TypeAlias extends BaseType {
 
   public constructor(outself: Type,
     public readonly alias: string
+    // doc // about type alias itself
   ) { super(outself); }
 
   public override toString() {
@@ -522,9 +567,3 @@ export class TypeAlias extends BaseType {
   }
 
 }
-
-// { a: boolean } | { b: number } more or less = { a?: boolean, b?: number } (only 1 of them can diverge)
-// { b: number } & { c: string } == { b: number, c: string }
-
-// { a: boolean } | { a: number } == { a: boolean | number }
-// { a: number } & { a: string } == { a: number & string } (ie never)

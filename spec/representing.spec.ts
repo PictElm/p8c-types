@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable } from '../src/typing';
+import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable } from '../src/typing';
 
 const expectString = (object: unknown) => expect(`${object}`);
 
@@ -31,22 +31,24 @@ describe("represents tables", () => {
 describe("represents functions", () => {
 
   it("simple", () => {
-    expectString(Type.make(TypeFunction, []).itself).to.equal("() -> []");
+    expectString(Type.make(TypeFunction, { names: [], infos: [], vararg: null }).itself).to.equal("() -> []");
   });
 
   it("parameter - (1)", () => {
-    expectString(Type.make(TypeFunction["p"]).itself).to.equal("(p: <p>) -> []");
+    const params = { names: ["p"], infos: [{ type: Type.make(TypeSome, "p") }], vararg: null };
+    expectString(Type.make(TypeFunction, params).itself).to.equal("(p: <p>) -> []");
   });
 
   it("return - (1)", () => {
-    const a = Type.make(TypeFunction, []).as(TypeFunction)!;
+    const a = Type.make(TypeFunction, { names: [], infos: [], vararg: null }).as(TypeFunction)!;
     a.setReturns([{ type: Type.make(TypeBoolean) }]);
     expectString(a).to.equal("() -> [boolean]");
   });
 
   it("circular", () => {
-    const b = Type.make(TypeFunction["p"]).as(TypeFunction)!;
-    b.setReturns([b.getParameters()[0][1]]);
+    const params = { names: ["p"], infos: [{ type: Type.make(TypeSome, "p") }], vararg: null };
+    const b = Type.make(TypeFunction, params).as(TypeFunction)!;
+    b.setReturns([b.getParameters().infos[0]]);
     expectString(b).to.equal("(p: <p>) -> [<p>]");
   });
 

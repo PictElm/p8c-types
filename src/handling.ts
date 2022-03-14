@@ -6,7 +6,7 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { TypeSomeOp } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
-import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber } from './typing';
+import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (node: T) => VarInfo[]
@@ -161,27 +161,27 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
     // -> type | never
     FunctionDeclaration: node => {
-      const names: string[] = [];
-      let isVararg = false;
+      const parameters: TypeFunction['parameters'] = { names: [], infos: [], vararg: null };
 
       for (let k = 0; k < node.parameters.length; k++) {
         const it = node.parameters[k];
-        if ('Identifier' === it.type)
-          names.push(it.name);
-        else isVararg = true;
+        if ('Identifier' === it.type) {
+          parameters.names.push(it.name);
+          parameters.infos.push({ type: Type.make(TypeSome, it.name) });
+        } else parameters.vararg = { type: Type.make(TypeVararg) };
       }
 
-      const info = { type: Type.make(TypeFunction, names) };
-      const functionType = info.type.as(TypeFunction)!;
+      const info = { type: Type.make(TypeFunction, parameters) };
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
       this.scope.fork(startLocation);
         // TODO: function type might benefit from having ref to its
         // inner scope (especially if trying typing some side-effects of calls)
-        functionType.getParameters().forEach(([name, type], k) => {
-          this.scope.set(name, type);
-          this.scope.locate(Range.fromNode(node.parameters[k]), name, type, LocateReason.Write);
+        parameters.names.forEach((name, k) => {
+          const info = parameters.infos[k];
+          this.scope.set(name, info);
+          this.scope.locate(Range.fromNode(node.parameters[k]), name, info, LocateReason.Write);
         });
 
         this.scope.pushContext(startLocation, 'Function', info.type);

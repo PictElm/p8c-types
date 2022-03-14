@@ -1,3 +1,4 @@
+import { VarInfo } from './scoping';
 import { Type, TypeAlias, TypeBoolean, TypeFunction, TypeIntersection, TypeLiteralBoolean, TypeLiteralNumber, TypeLiteralString, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable, TypeThread, TypeTuple, TypeUnion, TypeVararg } from './typing';
 
 /**
@@ -189,14 +190,14 @@ export class Parser {
           // ":" <type> | [":" <tuple>]
           if ((")" === value && !mayType) || "..." === value || (asAlias && ":" === this.token.value)) {
             let wasName = asAlias?.alias;
-            const signatures: [names: string[], types: Type[], vararg: Type | null][] = [];
+            const signatures: TypeFunction['parameters'][] = [];
 
             do { // "~>"
 
               let names: string[] = [];
-              let types: Type[] = [];
-              let vararg: Type | null = !wasName && ")" !== this.token.value
-                ? Type.make(TypeVararg)
+              let infos: VarInfo[] = [];
+              let vararg: VarInfo | null = !wasName && ")" !== this.token.value
+                ? { type: Type.make(TypeVararg) }
                 : null;
 
               while (")" !== this.token.value) {
@@ -206,7 +207,7 @@ export class Parser {
                   this.expect(":");
                   names.push(wasName);
                   this.next();
-                  types.push(this.parse(true));
+                  infos.push({ type: this.parse(true) });
                 }
 
                 // "..." [":" <tuple>]
@@ -215,11 +216,10 @@ export class Parser {
 
                   if (":" === this.token.value) {
                     this.next();
-                    const shouldTuple = this.parse(true);
-                    if (!(shouldTuple.itself instanceof TypeTuple))
-                      this.expected(["<tuple>"], "a " + shouldTuple.itself.constructor.name);
+                    const shouldTuple = this.parse(true).as(TypeTuple);
+                    if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
 
-                    // vararg.as(TypeVararg)!.setTypes(shouldTuple); // XXX: need something like that
+                    vararg = { type: Type.make(TypeVararg, shouldTuple.getTypes()) };
                   }
 
                   // ")"
@@ -244,7 +244,7 @@ export class Parser {
 
               // ")" ("->" <type> | "~>" ... | "~*")
               this.expect(")");
-              signatures.push([names, types, vararg]);
+              signatures.push({ names, infos, vararg });
 
               // "->" <type> | "~*"
               this.next();
@@ -275,25 +275,19 @@ export class Parser {
             // "->" <tuple>
             if ("->" === this.token.value && 1 === signatures.length) {
               this.next();
-              const shouldTuple = this.parse(true);
-              if (!(shouldTuple.itself instanceof TypeTuple))
-                this.expected(["<tuple>"], "a " + shouldTuple.itself.constructor.name);
+              const shouldTuple = this.parse(true).as(TypeTuple);
+              if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
 
-              type = Type.make(TypeFunction, signatures[0][0].map(it => it[0]));
-              const asFunction = type.as(TypeFunction)!;
-
-              // asFunction.setParameters(types); // XXX: need something like that
-              // asFunction.setReturns(shouldTuple); // XXX: need something like that
+              type = Type.make(TypeFunction, signatures[0]);
+              type.as(TypeFunction)!
+                .setReturns(shouldTuple
+                  .getTypes().map(type => ({ type }))
+                );
             }
 
             // "~*"
-            else if ("~*" === this.token.value) {
-              type = Type.make(TypeThread);
-              const asThread = type.as(TypeThread);
-
-              for (let k = 0; k < signatures.length; k++)
-                ; // asThread.pushSignature(names[k], types[k]); // XXX: need something like that
-            }
+            else if ("~*" === this.token.value)
+              type = Type.make(TypeThread, signatures.pop()!, ...signatures);
 
             else this.expected(1 === signatures.length ? ["->", "~>", "~*"] : ["~>", "~*"]);
           }
