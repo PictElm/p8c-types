@@ -6,7 +6,7 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { TypeSomeOp } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
-import { Type, TypeFunction, TypeTable, TypeSome } from './typing';
+import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (node: T) => VarInfo[]
@@ -171,7 +171,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         else isVararg = true;
       }
 
-      const info = { type: Type.Function(names) };
+      const info = { type: Type.make(TypeFunction, names) };
       const functionType = info.type.as(TypeFunction)!;
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
@@ -214,15 +214,15 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       this.scope.locate(Range.fromNode(node), node.name, info, LocateReason.Read);
       return [info];
     },
-    StringLiteral: node => [{ type: Type.String() }],
-    NumericLiteral: node => [{ type: Type.Number() }],
-    BooleanLiteral: node => [{ type: Type.Boolean() }],
-    NilLiteral: node => [{ type: Type.Nil() }],
+    StringLiteral: node => [{ type: Type.make(TypeString) }],
+    NumericLiteral: node => [{ type: Type.make(TypeNumber) }],
+    BooleanLiteral: node => [{ type: Type.make(TypeBoolean) }],
+    NilLiteral: node => [{ type: Type.make(TypeNil) }],
     // -> type[]
     VarargLiteral: node => [],
     // -> type
     TableConstructorExpression: node => {
-      const info = { type: Type.Table() };
+      const info = { type: Type.make(TypeTable) };
       const tableType = info.type.as(TypeTable)!;
       let autoIndex = 0;
 

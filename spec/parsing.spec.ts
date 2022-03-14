@@ -3,7 +3,7 @@ import chaiExclude from 'chai-exclude';
 use(chaiExclude);
 
 import { parseType } from '../src/parsing';
-import { Type } from '../src/typing';
+import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable } from '../src/typing';
 
 function expectCommon(o: Type | undefined, type: Type) {
   expect(o, "parsed result").to.not.be.undefined;
@@ -14,11 +14,11 @@ function expectCommon(o: Type | undefined, type: Type) {
 describe("parses primitives", () => {
 
   it("does", () => {
-    expectCommon(parseType("nil"), Type.Nil());
-    expectCommon(parseType("boolean"), Type.Boolean());
-    expectCommon(parseType("number"), Type.Number());
-    expectCommon(parseType("string"), Type.String());
-    // expectCommon(parseType("thread"), Type.Thread());
+    expectCommon(parseType("nil"), Type.make(TypeNil));
+    expectCommon(parseType("boolean"), Type.make(TypeBoolean));
+    expectCommon(parseType("number"), Type.make(TypeNumber));
+    expectCommon(parseType("string"), Type.make(TypeString));
+    // expectCommon(parseType("thread"), Type.make(TypeThread));
   });
 
 });
@@ -26,7 +26,7 @@ describe("parses primitives", () => {
 describe("parses tables", () => {
 
   it("tables", () => {
-    expectCommon(parseType("{}"), Type.Table());
+    expectCommon(parseType("{}"), Type.make(TypeTable));
   });
 
 });
@@ -34,7 +34,7 @@ describe("parses tables", () => {
 describe("parses functions", () => {
 
   it("functions", () => {
-    expectCommon(parseType("() -> []"), Type.Function([]));
+    expectCommon(parseType("() -> []"), Type.make(TypeFunction, []));
   });
 
 });

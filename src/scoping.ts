@@ -3,7 +3,7 @@ import { TypedEmitter } from 'tiny-typed-emitter';
 import { Metadata } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { Type } from './typing';
+import { Type, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
 export type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
@@ -52,7 +52,7 @@ class Scope {
       // if variable is not local
       if (old && !Object.is(niw, old)) {
         if (override) old.type = niw.type;
-        else old.type = Type.Union(old.type, niw.type);
+        else old.type = Type.make(TypeUnion, old.type, niw.type);
 
         // XXX: if a global variable is _defined_ within the child scope,
         // it should (if override not set) have a type `nil | <xyz>`

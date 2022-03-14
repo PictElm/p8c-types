@@ -1,4 +1,4 @@
-import { Type, TypeAlias, TypeFunction, TypeTable, TypeThread, TypeTuple, TypeVararg } from './typing';
+import { Type, TypeAlias, TypeBoolean, TypeFunction, TypeIntersection, TypeLiteralBoolean, TypeLiteralNumber, TypeLiteralString, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable, TypeThread, TypeTuple, TypeUnion, TypeVararg } from './typing';
 
 /**
  * tries to parse a type a the beginning of `source`
@@ -76,28 +76,28 @@ export class Parser {
 
     if (Types.SIMPLE === this.token.type) {
       switch (this.token.value) {
-        case "nil":      type = Type.Nil();      break;
-        case "boolean":  type = Type.Boolean();  break;
-        case "number":   type = Type.Number();   break;
-        case "string":   type = Type.String();   break;
-        // case "table":    type = Type.Table();    break; // TODO: TypeAnyTable
-        // case "function": type = Type.Function(); break; // TODO: TypeAnyFunction
-        // case "thread":   type = Type.Thread();   break; // TODO: TypeAnyThread
+        case "nil":      type = Type.make(TypeNil);      break;
+        case "boolean":  type = Type.make(TypeBoolean);  break;
+        case "number":   type = Type.make(TypeNumber);   break;
+        case "string":   type = Type.make(TypeString);   break;
+        // case "table":    type = Type.make(TypeTable);    break; // TODO: TypeAnyTable
+        // case "function": type = Type.make(TypeFunction); break; // TODO: TypeAnyFunction
+        // case "thread":   type = Type.make(TypeThread);   break; // TODO: TypeAnyThread
         default: throw new Parser.SyntaxError("non exhaustive handling of simple types");
       }
     }
 
     else if (Types.LITERAL & this.token.type) {
       switch (this.token.type) {
-        case Types.LITERAL_BOOLEAN: type = Type.LiteralBoolean(this.token.value as boolean); break;
-        case Types.LITERAL_NUMBER:  type = Type.LiteralNumber(this.token.value as number); break;
-        case Types.LITERAL_STRING:  type = Type.LiteralString(this.token.value as string); break;
+        case Types.LITERAL_BOOLEAN: type = Type.make(TypeLiteralBoolean, this.token.value as boolean); break;
+        case Types.LITERAL_NUMBER:  type = Type.make(TypeLiteralNumber, this.token.value as number); break;
+        case Types.LITERAL_STRING:  type = Type.make(TypeLiteralString, this.token.value as string); break;
         default: throw new Parser.SyntaxError("non exhaustive handling of literal types");
       }
     }
 
     else if (Types.ALIAS === this.token.type) {
-      type = Type.Alias(`${this.token.value}`);
+      type = Type.make(TypeAlias, `${this.token.value}`);
     }
 
     else if (Types.PUNCTUATOR === this.token.type) {
@@ -105,7 +105,7 @@ export class Parser {
       switch (value) {
 
         case "{": { // table
-          type = Type.Table();
+          type = Type.make(TypeTable);
           const asTable = type.itself as TypeTable;
 
           do { // while ","
@@ -164,7 +164,7 @@ export class Parser {
 
           } while ("," === this.token.value);
 
-          type = Type.Tuple(types);
+          type = Type.make(TypeTuple, types);
 
           this.expect("]");
         } break;
@@ -196,7 +196,7 @@ export class Parser {
               let names: string[] = [];
               let types: Type[] = [];
               let vararg: Type | null = !wasName && ")" !== this.token.value
-                ? Type.Vararg()
+                ? Type.make(TypeVararg)
                 : null;
 
               while (")" !== this.token.value) {
@@ -279,7 +279,7 @@ export class Parser {
               if (!(shouldTuple.itself instanceof TypeTuple))
                 this.expected(["<tuple>"], "a " + shouldTuple.itself.constructor.name);
 
-              type = Type.Function(signatures[0][0].map(it => it[0]));
+              type = Type.make(TypeFunction, signatures[0][0].map(it => it[0]));
               const asFunction = type.as(TypeFunction)!;
 
               // asFunction.setParameters(types); // XXX: need something like that
@@ -288,7 +288,7 @@ export class Parser {
 
             // "~*"
             else if ("~*" === this.token.value) {
-              type = Type.Thread();
+              type = Type.make(TypeThread);
               const asThread = type.as(TypeThread);
 
               for (let k = 0; k < signatures.length; k++)
@@ -309,7 +309,7 @@ export class Parser {
           this.next();
           if (Types.ALIAS !== this.token.type) this.expected(["<name>"]);
 
-          type = Type.Some(`${this.token.value}`);
+          type = Type.make(TypeSome, `${this.token.value}`);
           this.next();
 
           this.expect(">");
@@ -326,7 +326,7 @@ export class Parser {
     // "&" <type>
     if ("&" === this.token.value) {
       this.next();
-      type = Type.Intersection(type, this.parse(false));
+      type = Type.make(TypeIntersection, type, this.parse(false));
 
       // this.next();
     }
@@ -334,7 +334,7 @@ export class Parser {
     // "|" <type>
     if (canUnion && "|" === this.token.value) {
       this.next();
-      type = Type.Union(type, this.parse(true));
+      type = Type.make(TypeUnion, type, this.parse(true));
     }
 
     return type;

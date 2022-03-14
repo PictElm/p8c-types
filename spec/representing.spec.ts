@@ -1,17 +1,17 @@
 import { expect } from 'chai';
 
-import { Type, TypeFunction, TypeTable } from '../src/typing';
+import { Type, TypeBoolean, TypeFunction, TypeNil, TypeNumber, TypeString, TypeTable } from '../src/typing';
 
 const expectString = (object: unknown) => expect(`${object}`);
 
 describe("represents primitives", () => {
 
   it("does", () => {
-    expectString(Type.Nil().itself).to.equal("nil");
-    expectString(Type.Boolean().itself).to.equal("boolean");
-    expectString(Type.Number().itself).to.equal("number");
-    expectString(Type.String().itself).to.equal("string");
-    // expectString(Type.Thread().itself).to.equal("thread");
+    expectString(Type.make(TypeNil).itself).to.equal("nil");
+    expectString(Type.make(TypeBoolean).itself).to.equal("boolean");
+    expectString(Type.make(TypeNumber).itself).to.equal("number");
+    expectString(Type.make(TypeString).itself).to.equal("string");
+    // expectString(Type.make(TypeThread).itself).to.equal("thread");
   });
 
 });
@@ -19,10 +19,10 @@ describe("represents primitives", () => {
 describe("represents tables", () => {
 
   it("tables", () => {
-    expectString(Type.Table().itself).to.equal("{}");
+    expectString(Type.make(TypeTable).itself).to.equal("{}");
 
-    const a = Type.Table().as(TypeTable)!;
-    a.setField("key", { type: Type.Boolean() })
+    const a = Type.make(TypeTable).as(TypeTable)!;
+    a.setField("key", { type: Type.make(TypeBoolean) })
     expectString(a).to.equal("{ key: boolean }");
   });
 
@@ -31,21 +31,21 @@ describe("represents tables", () => {
 describe("represents functions", () => {
 
   it("simple", () => {
-    expectString(Type.Function([]).itself).to.equal("() -> []");
+    expectString(Type.make(TypeFunction, []).itself).to.equal("() -> []");
   });
 
   it("parameter - (1)", () => {
-    expectString(Type.Function(["p"]).itself).to.equal("(p: <p>) -> []");
+    expectString(Type.make(TypeFunction["p"]).itself).to.equal("(p: <p>) -> []");
   });
 
   it("return - (1)", () => {
-    const a = Type.Function([]).as(TypeFunction)!;
-    a.setReturns([{ type: Type.Boolean() }]);
+    const a = Type.make(TypeFunction, []).as(TypeFunction)!;
+    a.setReturns([{ type: Type.make(TypeBoolean) }]);
     expectString(a).to.equal("() -> [boolean]");
   });
 
   it("circular", () => {
-    const b = Type.Function(["p"]).as(TypeFunction)!;
+    const b = Type.make(TypeFunction["p"]).as(TypeFunction)!;
     b.setReturns([b.getParameters()[0][1]]);
     expectString(b).to.equal("(p: <p>) -> [<p>]");
   });

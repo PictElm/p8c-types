@@ -46,28 +46,7 @@ abstract class BaseTypeLiteral<Eq> extends BaseType {
 
 }
 
-/**
- * yeah, this will need to be done differently ifever trying to have
- * used-defined types to extend the typing system...
- */
-type Ctors
-  = typeof TypeNil
-  | typeof TypeBoolean
-  | typeof TypeNumber
-  | typeof TypeString
-  | typeof TypeLiteralBoolean
-  | typeof TypeLiteralNumber
-  | typeof TypeLiteralString
-  | typeof TypeTuple
-  | typeof TypeVararg
-  | typeof TypeTable
-  | typeof TypeFunction
-  | typeof TypeThread
-  | typeof TypeSome
-  | typeof TypeUnion
-  | typeof TypeIntersection
-  | typeof TypeAlias
-  ;
+type OmitFirst<A extends any[]> = A extends [unknown, ...infer T] ? T : never;
 
 /**
  * this is the class to use to create a typing information
@@ -87,32 +66,20 @@ export class Type {
   private constructor() { }
 
   /** checks if the type itself is instance of given parameter, if not returns `undefined` */
-  public as<Z extends Ctors>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
+  public as<Z extends new (...args: any[]) => BaseType>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
   /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
   public toString() { return `Type@_id${this._id}`; }
   public toJSON(key: string) { const name = this.itself.constructor.name; return { [name]: this.itself.toJSON(name) } };
 
-  // XXX: still no
-  public static Nil()                                 { const r = new Type(); r.mutate(new TypeNil(r));                       return r; }
-  public static Boolean()                             { const r = new Type(); r.mutate(new TypeBoolean(r));                   return r; }
-  public static Number()                              { const r = new Type(); r.mutate(new TypeNumber(r));                    return r; }
-  public static String()                              { const r = new Type(); r.mutate(new TypeString(r));                    return r; }
-  public static LiteralBoolean(value: boolean)        { const r = new Type(); r.mutate(new TypeLiteralBoolean(r, value));     return r; }
-  public static LiteralNumber(value: number)          { const r = new Type(); r.mutate(new TypeLiteralNumber(r, value));      return r; }
-  public static LiteralString(value: string)          { const r = new Type(); r.mutate(new TypeLiteralString(r, value));      return r; }
-  public static Tuple(types: Type[])                  { const r = new Type(); r.mutate(new TypeTuple(r, types));              return r; }
-  public static Vararg()                              { const r = new Type(); r.mutate(new TypeVararg(r));                    return r; }
-  public static Table()                               { const r = new Type(); r.mutate(new TypeTable(r));                     return r; }
-  public static Function(names: string[])             { const r = new Type(); r.mutate(new TypeFunction(r, names));           return r; }
-  public static Thread()                              { const r = new Type(); r.mutate(new TypeThread(r));                    return r; }
-  public static Some(from?: string)                   { const r = new Type(); r.mutate(new TypeSome(r, from));                return r; }
-  public static Union(left: Type, right: Type)        { const r = new Type(); r.mutate(new TypeUnion(r, left, right));        return r; }
-  public static Intersection(left: Type, right: Type) { const r = new Type(); r.mutate(new TypeIntersection(r, left, right)); return r; }
-  public static Alias(alias: string)                  { const r = new Type(); r.mutate(new TypeAlias(r, alias));              return r; }
+  public static make<Z extends new (...args: [Type, ...OmitFirst<ConstructorParameters<Z>>]) => BaseType>(ctor: Z, ...args: OmitFirst<ConstructorParameters<Z>>) {
+    const r = new Type();
+    r.mutate(new ctor(r, ...args));
+    return r;
+  }
 
-  public static noType() { return Type.Nil(); } // YYY?
+  public static noType() { return Type.make(TypeNil); } // YYY?
 
 }
 
@@ -120,7 +87,7 @@ export class TypeNil extends BaseType {
 
   public override toString() { return "nil"; }
   public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Nil()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeNil)); }
 
 }
 
@@ -128,7 +95,7 @@ export class TypeBoolean extends BaseType {
 
   public override toString() { return "boolean"; }
   public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Boolean()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeBoolean)); }
 
 }
 
@@ -136,7 +103,7 @@ export class TypeNumber extends BaseType {
 
   public override toString() { return "number"; }
   public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Number()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeNumber)); }
 
 }
 
@@ -144,7 +111,7 @@ export class TypeString extends BaseType {
 
   public override toString() { return "string"; }
   public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.String()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeString)); }
 
 }
 
@@ -154,7 +121,7 @@ export class TypeLiteralBoolean extends BaseTypeLiteral<boolean> {
   public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
-    return BaseType.mark(Type.LiteralBoolean(this.value));
+    return BaseType.mark(Type.make(TypeLiteralBoolean, this.value));
   }
 
 }
@@ -165,7 +132,7 @@ export class TypeLiteralNumber extends BaseTypeLiteral<number> {
   public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
-    return BaseType.mark(Type.LiteralNumber(this.value));
+    return BaseType.mark(Type.make(TypeLiteralNumber, this.value));
   }
 
 }
@@ -176,7 +143,7 @@ export class TypeLiteralString extends BaseTypeLiteral<string> {
   public override toJSON() { return this.value; }
 
   public resolved(): Resolved {
-    return BaseType.mark(Type.LiteralString(this.value));
+    return BaseType.mark(Type.make(TypeLiteralString, this.value));
   }
 
 }
@@ -196,7 +163,7 @@ export class TypeTuple extends BaseType {
   }
 
   public override resolved(): Resolved {
-    return BaseType.mark(Type.Tuple(this.types.map(it => it.itself.resolved())));
+    return BaseType.mark(Type.make(TypeTuple, this.types.map(it => it.itself.resolved())));
   }
 
 }
@@ -207,7 +174,7 @@ export class TypeVararg extends BaseType { // TypeTuple
 
   public override toString() { return "..."; }
   public override toJSON() { return null; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Vararg()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeVararg)); }
 
 }
 
@@ -262,7 +229,7 @@ export class TypeTable extends BaseType {
   }
 
   public override resolved(): Resolved {
-    const r = Type.Table();
+    const r = Type.make(TypeTable);
     const tableType = r.as(TypeTable)!;
 
     for (const key in this.fields)
@@ -291,7 +258,7 @@ export class TypeFunction extends BaseType {
 
   public constructor(outself: Type, names: string[]) {
     super(outself);
-    this.parameters = names.map(name => [name, { type: Type.Some(name) }]);
+    this.parameters = names.map(name => [name, { type: Type.make(TypeSome, name) }]);
   }
 
   /** get the parameters info */
@@ -368,7 +335,7 @@ export class TypeFunction extends BaseType {
   }
 
   public override resolved(): Resolved {
-    const r = Type.Function(this.parameters.map(it => it[0]));
+    const r = Type.make(TypeFunction, this.parameters.map(it => it[0]));
     const functionType = r.as(TypeFunction)!;
 
     const returns = this.returns.map(ret => {
@@ -393,7 +360,7 @@ export class TypeThread extends BaseType { // TypeFunction
 
   public override toString() { return "thread"; }
   public override toJSON() { return "TODO"; }
-  public override resolved(): Resolved { return BaseType.mark(Type.Thread()); }
+  public override resolved(): Resolved { return BaseType.mark(Type.make(TypeThread)); }
 
 }
 
@@ -422,7 +389,7 @@ export class TypeSome extends BaseType {
   /** not in-place applied (a new type is created) */
   public getApplied<T extends any[]>(operation: TypeSomeOp<T>) {
     //const repr = this.from && operation.represent(this.from);
-    const r = { type: Type.Some() };
+    const r = { type: Type.make(TypeSome) };
     const someType = r.type.as(TypeSome)!;
 
     // "acts as `this` with `operation` `done` on it"
