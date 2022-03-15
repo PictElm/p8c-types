@@ -100,6 +100,8 @@ export class Parser {
     }
 
     else if (Types.ALIAS === this.token.type) {
+      // YYY: may want to emit them as we find them
+      // so that they are easier to identifier and locate (eg. onHover in doc comments)
       type = Type.make(TypeAlias, `${this.token.value}`);
     }
 
@@ -347,8 +349,8 @@ export class Parser {
     this.token = this.lex();
   }
 
-  protected expected(any: string[], got?: string): never {
-    const a = 1 === any.length ? any[0] : `one of ${any.join(", ")}`;
+  protected expected(oneOf: string[], got?: string): never {
+    const a = 1 === oneOf.length ? oneOf[0] : `one of ${oneOf.join(", ")}`;
     const b = `"${got ?? this.token.value}"`;
     throw new Parser.SyntaxError(`expected ${a}; got ${b}`);
   }

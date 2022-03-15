@@ -6,7 +6,7 @@ import { log } from './logging';
 import { Type, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
-export type VarInfo = { type: Type, doc?: Metadata/*, range: Range*/ }; // YYY?
+export type VarInfo = { type: Type, doc?: Metadata };
 
 /**
  * `variable` uses Object.create and prototype inheritance to
@@ -138,11 +138,15 @@ export enum LocateReason {
 }
 
 interface ScopingEvents {
+
   'fork': (location: Location, openingScope: Scope) => void;
   'join': (location: Location, closingScope: Scope) => void;
+
   'pushContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
   'popContext': <T extends ContextKind>(location: Location, context: ContextType<T>) => void;
+
   'locate': (range: Range, name: string, variable: VarInfo, reason: LocateReason) => void;
+
 }
 
 /**
@@ -180,9 +184,10 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
 
   /** pushes to the relevant context stack */
   public pushContext<T extends ContextKind>(location: Location, tag: T, ...args: ConstructorParameters<typeof Context[T]>) {
-    const context = new (Context[tag] as any)(...args) as ContextType<T>; // YYY: craps the bed otherwise
+    const ctor = Context[tag] as new (...args: ConstructorParameters<typeof Context[T]>) => ContextType<T>; // typing me failing -.-
+    const context = new ctor(...args);
     if (!this.contexts[tag]) this.contexts[tag] = [];
-    this.contexts[tag]!.push(context as any);
+    this.contexts[tag]!.push(context as any); // -.-
 
     this.emit('pushContext', location, context);
   }
@@ -192,7 +197,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
     const it = this.contexts[tag];
     assert(it, `Scoping.findContext: no context were pushed with the tag '${tag}'`);
     assert(it.length, `Scoping.findContext: no context left with the tag '${tag}'`);
-    return it[it.length-1] as ContextType<T>; // YYY: craps the bed otherwise
+    return it[it.length-1] as ContextType<T>; // -.-
   }
 
   /** pops from the relevant context stack */

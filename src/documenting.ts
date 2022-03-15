@@ -1,7 +1,8 @@
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Location, Range } from './locating';
 import { parseType } from './parsing';
-import { Type } from './typing';
+import { LocateReason, VarInfo } from './scoping';
+import { Type, TypeAlias, TypeFunction, TypeSome, TypeTable } from './typing';
 
 class Description {
 
@@ -54,8 +55,16 @@ export class Metadata {
 
   public readonly sources: Range[] = [];
 
+  /** keeps empty lines (as empty strings) */
   public readonly description: Description = new Description();
-  public readonly type?: Type;
+  /** because a `@type` tag can specify multiple types */
+  public readonly types: (Type | undefined)[] = [];
+
+  public get type(): Type | undefined {
+    return 1 === this.types.length
+      ? this.types[0]
+      : undefined;
+  }
 
   public isFollowUp(range: Range) {
     const last = this.sources[this.sources.length-1];
@@ -98,11 +107,11 @@ class Bidoof {
   }
 
   public rest(): string | undefined {
-    if (!this.source) undefined;
+    if (!this.source) return undefined;
     const r = this.source.trim();
-
     this.source = "";
-    return r;
+
+    return r || undefined;
   }
 
 }
@@ -118,11 +127,13 @@ interface DocumentingEvents {
   'param': (range: Range, name: string | null, type?: Type, description?: string) => void;
   'return': (range: Range, type: Type, description?: string) => void;
   'field': (range: Range, name: string | Type, type?: Type, description?: string) => void;
-  'see': (range: Range, ref: any) => void;
-  'todo': (range: Range, description?: string) => void; // YYY: may also not be applied anything
+  'see': (range: Range, ref?: string) => void;
+  'todo': (range: Range, description?: string) => void;
 
   'unknown': (range: Range, tag: string, text: string) => void;
   'documentation': (range: Range, text: string) => void;
+
+  'locate': (range: Range, name: string, variable: VarInfo, reason: LocateReason) => void; // YYY: not quite a variable, but an alias..
 
 }
 
@@ -135,8 +146,8 @@ interface DocumentingEvents {
  */
 export class Documenting extends TypedEmitter<DocumentingEvents> {
 
-  private alias: Record<string, Type> = {};
-  private globals: Record<string, Type> = {};
+  public readonly alias: Record<string, TypeAlias | undefined> = {}; // TODO: alias types registry
+  public readonly globals: Record<string, VarInfo | undefined> = {};
 
   private entries: Metadata[] = [];
 
@@ -185,10 +196,16 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
     if (!following) this.entries.push(entry);
     entry.sources.push(range);
 
-    text.split("\n").forEach(line => {
-      line = line.trim();
-      if (!line) return; // YYY: discard empty lines
+    let buildingFunction: {
+        parameters: TypeFunction['parameters'],
+        returns: TypeFunction['returns'],
+      } | undefined;
+    let buildingTable: {
+        fields: TypeTable['fields'],
+        indices: TypeTable['indices'],
+      } | undefined;
 
+    text.split("\n").forEach((line, k) => {
       // find if startswith a tag
       //   if not, simple documentation, entry.pushDescription()
       // else
@@ -198,11 +215,23 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
       //     typing tags attempt to complete the entry's type
       //     other documentation tags are added to the entry.tags
 
-      const match = /^\s*@(\w+)(?:\s+(.*)|$)/.exec(line);
+      const match = /^(\s*)@(\w+)(?:(\s+)(\S*)|$)/.exec(line);
       if (match) {
-        const tagRange: Range = Range.emptyRange(); // TODO: resolve exact range for the match within text
+        const [_, before, tag, between, text] = match;
 
-        const [_, tag, text] = match;
+        const startLocation = new Location(
+          range.start.line + k,
+          !k ? range.start.character + before.length : before.length
+        );
+        const endLocation = new Location(
+          startLocation.line,
+          startLocation.character + tag.length + between?.length ?? 0 + text?.length ?? 0,
+        );
+        const tagRange = new Range(
+          startLocation,
+          endLocation,
+        );
+
         const bidoof = new Bidoof(text);
 
         which: switch (tag) {
@@ -216,7 +245,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
             const type = bidoof.nextType();
             if (!type) throw "not implemented: signal missing <type>";
 
-            this.alias[alias] = type;
+            this.alias[alias] = Type.make(TypeAlias, alias, entry, type).as(TypeAlias);
             this.emit('alias', tagRange, alias, type);
           } break;
 
@@ -226,7 +255,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
             const type = bidoof.nextExact(':') && bidoof.nextType();
 
-            if (type) this.globals[name] = type; // XXX: _buuuut_ the description metadata is not carried!
+            if (type) this.globals[name] = { type, doc: entry };
             this.emit('global', tagRange, name, type, bidoof.rest());
           } break;
 
@@ -242,6 +271,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
               types.push(next);
             }
 
+            entry.types.push(...types);
             this.emit('type', tagRange, types);
           } break;
 
@@ -251,6 +281,17 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
             const type = bidoof.nextExact(':') && bidoof.nextType();
 
+            let p = (buildingFunction
+              ?? (buildingFunction = {
+                  parameters: { names: [], infos: [], vararg: null },
+                  returns: [],
+                })
+              ).parameters;
+            p.names.push(name);
+            p.infos.push({
+              type: type ?? Type.make(TypeSome, name),
+              doc: entry, // bidoof.rest()
+            });
             this.emit('param', tagRange, name, type, bidoof.rest());
           } break;
 
@@ -258,6 +299,16 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
             const type = bidoof.nextType();
             if (!type) throw "not implemented: signal erroneous <type>";
 
+            let r = (buildingFunction
+              ?? (buildingFunction = {
+                  parameters: { names: [], infos: [], vararg: null },
+                  returns: [],
+                })
+              ).returns;
+            r.push({
+              type: type,
+              doc: entry, // bidoof.rest()
+            });
             this.emit('return', tagRange, type, bidoof.rest());
           } break;
 
@@ -273,15 +324,25 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
             const type = bidoof.nextExact(':') && bidoof.nextType();
 
+            const info = {
+              type: type ?? Type.noType(),
+              doc: entry, // bidoof.rest()
+            };
+            let t = buildingTable
+              ?? (buildingTable = {
+                  fields: {},
+                  indices: [],
+                });
+            if (indexer) t.indices[indexer && 0] = info;
+            else t.fields[name!] = info
             this.emit('field', tagRange, base, type, bidoof.rest());
           } break;
 
-          case 'see': {
-            this.emit('see', tagRange, bidoof.rest()); // XXX: parse ref as one of: name, alias, file, url
-          } break;
-
+          case 'see':
           case 'todo': {
-            this.emit('todo', tagRange, bidoof.rest());
+            const text = bidoof.rest();
+            entry.description.pushTag(tag, text ?? "");
+            this.emit(tag, tagRange, text);
           } break;
 
           default: {
@@ -290,10 +351,35 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
           }
         }
       } else {
+        line = line.trim();
         entry.description.pushText(line);
-        this.emit('documentation', range, line); // YYY: addapt the range here too?
+        this.emit('documentation', range, line); // addapt the range here too?
       }
     });
+
+    if (!entry.type) {
+      if (buildingFunction) {
+        const type = Type.make(TypeFunction, buildingFunction.parameters);
+        type.as(TypeFunction)!.setReturns(buildingFunction.returns);
+        entry.types.push(type);
+      }
+
+      if (buildingTable) {
+        const type = Type.make(TypeTable);
+        const asTable = type.as(TypeTable)!;
+        Object
+          .entries(buildingTable.fields)
+          .forEach(([field, info]) =>
+            asTable.setField(field, info)
+          );
+        Object
+          .entries(buildingTable.indices)
+          .forEach(([indexer, info]) =>
+            asTable.setIndex(0, info)
+          );
+        entry.types.push(type);
+      }
+    }
   }
 
 }

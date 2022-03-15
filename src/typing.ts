@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { Metadata } from './documenting';
 import { TypeSomeOp } from './operating';
 import { VarInfo } from './scoping';
 
@@ -15,7 +16,7 @@ abstract class BaseType {
   public constructor (protected readonly outself: Type) { }
 
   public abstract toString(): string;
-  public abstract toJSON(key: string): any;
+  public abstract toJSON(key: string): unknown;
   public abstract resolved(): Resolved;
 
   protected static mark(type: Type) {
@@ -46,7 +47,7 @@ abstract class BaseTypeLiteral<Eq> extends BaseType {
 
 }
 
-type OmitFirst<A extends any[]> = A extends [unknown, ...infer T] ? T : never;
+type OmitFirst<A extends unknown[]> = A extends [unknown, ...infer T] ? T : never;
 
 /**
  * this is the class to use to create a typing information
@@ -79,7 +80,7 @@ export class Type {
     return r;
   }
 
-  public static noType() { return Type.make(TypeNil); } // YYY?
+  public static noType() { return Type.make(TypeNil); }
 
 }
 
@@ -194,8 +195,8 @@ export class TypeTable extends BaseType {
   private indices: Array<VarInfo> = [];
 
   /** set an entry of known (string) name */
-  public setField(field: string, type: VarInfo) {
-    this.fields[field] = type;
+  public setField(field: string, info: VarInfo) {
+    this.fields[field] = info;
   }
 
   /** get an entry of known (string) name */
@@ -336,7 +337,7 @@ export class TypeFunction extends BaseType {
     return `(${parameters}) -> [${returns}]`;
   }
 
-  public override toJSON() {
+  public override toJSON(): unknown {
     return {
       parameters: {
         names: this.parameters.names,
@@ -386,12 +387,12 @@ export class TypeThread extends TypeFunction {
   public getNextSignature(): TypeThread {
     const parameters = this.signatures[0] ?? this.parameters;
     const rest = this.signatures.slice(1);
-    return Type.make(TypeThread, parameters, ...rest).itself as TypeThread; // XXX
+    return Type.make(TypeThread, parameters, ...rest).itself as TypeThread;
   }
 
   public override toString() { return "thread"; }
 
-  public override toJSON(): any {
+  public override toJSON() {
     return {
       signatures: [this.parameters, ...this.signatures].map(parameters => ({
         parameters: {
@@ -425,13 +426,13 @@ export class TypeSome extends BaseType {
   ) { super(outself); }
 
   /** in-place applied (the type is modified) */
-  public setApplied<T extends any[]>(operation: TypeSomeOp<T>) {
+  public setApplied(operation: TypeSomeOp) {
     if (this.done) this.done.then(operation);
     else this.done = operation;
   }
 
   /** not in-place applied (a new type is created) */
-  public getApplied<T extends any[]>(operation: TypeSomeOp<T>) {
+  public getApplied(operation: TypeSomeOp) {
     //const repr = this.from && operation.represent(this.from);
     const r = { type: Type.make(TypeSome) };
     const someType = r.type.as(TypeSome)!;
@@ -544,12 +545,12 @@ export class TypeIntersection extends BaseType {
 
 }
 
-// TODO: alias types registry
 export class TypeAlias extends BaseType {
 
   public constructor(outself: Type,
-    public readonly alias: string
-    // doc // about type alias itself
+    public readonly alias: string,
+    public readonly doc?: Metadata,
+    public forType?: Type
   ) { super(outself); }
 
   public override toString() {

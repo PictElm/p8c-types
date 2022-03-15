@@ -10,7 +10,7 @@ import { Resolved, Type, TypeFunction, TypeTable } from './typing';
  * @todo TODO: same as Handling.handlers, would like it refactored
  * so it can easily be augmented/adapted for new kinds of usages
  */
-export abstract class TypeSomeOp<T extends any[] = unknown[]> {
+export abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
   protected args: T;
   private next?: TypeSomeOp;

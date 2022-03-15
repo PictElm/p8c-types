@@ -12,7 +12,9 @@ type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (node: T) => VarInfo[]
 
 interface HandlingEvents {
+
   'handle': (node: ast.Node) => void;
+
 }
 
 /**
@@ -98,7 +100,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     LocalStatement: node => {
       return this.handlers['AssignmentStatement']!(node as any); // XXX!
       // diff with simple AssignmentStatement is new names shadow previous
-      // but as it stands, this works out alright (maybe?)
+      // if ('Identifier' === it.type) { .. update in local scope .. }
     },
     AssignmentStatement: node => {
       const infos = node.init
@@ -114,6 +116,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         if (mayDoc) initInfo.doc = mayDoc;
 
         if ('Identifier' === it.type) {
+          // XXX: this ties back to the typed name merging strategy (or whatever - see Scoping)
+          // if exists in scope,
+          //    then needs to update in appropriate scope
+          //    otherwise it is a global name
           this.scope.set(it.name, initInfo);
           this.scope.locate(Range.fromNode(it), it.name, initInfo, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
@@ -312,7 +318,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     TableKeyString: node => [],
     TableValue: node => [],
     Comment: node => {
-      if (node.value.startsWith("-")) // YYY: doc comments strarts with a -
+      if (node.value.startsWith("-")) // doc comments starts with a -
         this.doc.process(Range.fromNode(node), node.value.slice(1));
       return [];
     },
