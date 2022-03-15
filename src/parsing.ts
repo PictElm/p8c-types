@@ -84,6 +84,7 @@ export class Parser {
         // case "table":    type = Type.make(TypeTable);    break; // TODO: TypeAnyTable
         // case "function": type = Type.make(TypeFunction); break; // TODO: TypeAnyFunction
         // case "thread":   type = Type.make(TypeThread);   break; // TODO: TypeAnyThread
+        /* istanbul ignore next */
         default: throw new Parser.SyntaxError("non exhaustive handling of simple types");
       }
     }
@@ -91,8 +92,9 @@ export class Parser {
     else if (Types.LITERAL & this.token.type) {
       switch (this.token.type) {
         case Types.LITERAL_BOOLEAN: type = Type.make(TypeLiteralBoolean, this.token.value as boolean); break;
-        case Types.LITERAL_NUMBER:  type = Type.make(TypeLiteralNumber, this.token.value as number); break;
-        case Types.LITERAL_STRING:  type = Type.make(TypeLiteralString, this.token.value as string); break;
+        case Types.LITERAL_NUMBER:  type = Type.make(TypeLiteralNumber, this.token.value as number);   break;
+        case Types.LITERAL_STRING:  type = Type.make(TypeLiteralString, this.token.value as string);   break;
+        /* istanbul ignore next */
         default: throw new Parser.SyntaxError("non exhaustive handling of literal types");
       }
     }
@@ -404,7 +406,7 @@ export class Parser {
       const base = 48 === char && { b: 2, o: 8, x: 16 }[this.source[1]] || 10;
       const raw = this.source.match(/^\d[box]?\d+/)![0];
       this.advance(raw?.length);
-      return { type: Types.LITERAL_NUMBER, value: parseInt(raw, base) };
+      return { type: Types.LITERAL_NUMBER, value: parseInt(10 === base ? raw : raw.slice(2), base) };
     }
 
     // scan simple, alias, literal nil and literal boolean)

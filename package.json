@@ -48,6 +48,8 @@
     "chai": "^4.3.6",
     "chai-exclude": "^2.1.0",
     "eslint": "^8.10.0",
+    "flatted": "^3.2.5",
+    "json-stringify-pretty-compact": "^3.0.0",
     "mocha": "^9.2.1",
     "nodemon": "^2.0.15",
     "nyc": "^15.1.0",
