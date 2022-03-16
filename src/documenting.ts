@@ -203,7 +203,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
       } | undefined;
     let buildingTable: {
         fields: TypeTable['fields'],
-        indices: TypeTable['indices'],
+        indexers: TypeTable['indexers'],
       } | undefined;
 
     // YYY: types spanning multiple lines..?
@@ -333,9 +333,9 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
             let t = buildingTable
               ?? (buildingTable = {
                   fields: {},
-                  indices: [],
+                  indexers: [],
                 });
-            if (indexer) t.indices[indexer && 0] = info;
+            if (indexer) t.indexers.push([indexer, info]);
             else t.fields[name!] = info
             this.emit('field', tagRange, base, type, bidoof.rest());
           } break;
@@ -374,10 +374,9 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
           .forEach(([field, info]) =>
             asTable.setField(field, info)
           );
-        Object
-          .entries(buildingTable.indices)
+        buildingTable.indexers
           .forEach(([indexer, info]) =>
-            asTable.setIndex(0, info)
+            asTable.setIndexer(indexer, info)
           );
         entry.types.push(type);
       }

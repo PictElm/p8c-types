@@ -333,11 +333,12 @@ describe("handling", () => {
       const info = handleExpression("{ 'hey', 42, false, {} }");
       expectVarInfoType(info, TypeTable);
 
+      // XXX/TODO: all of that is very temporary! (need to distinguish number from string keys)
       const asTable = info.type.as(TypeTable)!;
-      expectVarInfoType(asTable.getIndex(1), TypeString, "index 1");
-      expectVarInfoType(asTable.getIndex(2), TypeNumber, "index 2");
-      expectVarInfoType(asTable.getIndex(3), TypeBoolean, "index 3");
-      expectVarInfoType(asTable.getIndex(4), TypeTable, "index 4");
+      expectVarInfoType(asTable.getField((1).toString()), TypeString, "index 1");
+      expectVarInfoType(asTable.getField((2).toString()), TypeNumber, "index 2");
+      expectVarInfoType(asTable.getField((3).toString()), TypeBoolean, "index 3");
+      expectVarInfoType(asTable.getField((4).toString()), TypeTable, "index 4");
     });
 
     it("TableConstructorExpression - TableKey", () => {

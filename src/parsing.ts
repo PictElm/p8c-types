@@ -147,6 +147,7 @@ export class Parser {
               this.expect(":");
               this.next();
               if (Types.SIMPLE !== this.token.type) this.expected(["<simple>"]);
+              const indexerType = parseType(this.token.value)!;
 
               // ... "]" ":" <type>
               this.next();
@@ -155,8 +156,7 @@ export class Parser {
               this.expect(":");
 
               this.next();
-              // XXX/TODO: indexing by type
-              asTable.setField(`[${name ?? ""}: ${this.token.value}]`, { type: this.parse(true) });
+              asTable.setIndexer(indexerType, { type: this.parse(true) });
               this.next();
             }
 

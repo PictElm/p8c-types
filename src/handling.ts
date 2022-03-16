@@ -236,8 +236,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         switch (it.type) {
           case 'TableKey': {
             // NOTE: need to change where says xyzType and its the `itself`
-            const keyType = this.handle(it.key)[0].type.itself;
-            const valueType = this.handle(it.value)[0].type.itself;
+            const keyType = this.handle(it.key)[0].type;
+            const valueInfo = this.handle(it.value)[0];
+            tableType.setIndexer(keyType, valueInfo);
+            // TODO: what about multiple entries with the same keyType?!
           } break;
 
           case 'TableKeyString': {
@@ -245,10 +247,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           } break;
 
           case 'TableValue': {
-            const types = this.handle(it.value);
-            if (node.fields.length-1 === k)
-              types.forEach(niw => tableType.setIndex(++autoIndex, niw));
-            else tableType.setIndex(++autoIndex, types[0]);
+            // TODO: should deal with table-as-list better
+            // (+ this does not differentiate between equivalent number and string keys)
+            tableType.setField(""+ ++autoIndex, this.handle(it.value)[0]);
+            // also need to handle last TableValue entry ^^
           } break;
         }
       });

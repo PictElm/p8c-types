@@ -84,15 +84,14 @@ export abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
       const [key] = this.args;
       let r: Resolved;
 
-      if ('string' === typeof key)
+      if ('string' === typeof key || 'number' === typeof key)
         r = to.itself instanceof TypeTable
-          ? to.itself.getField(key).type.itself.resolved()
+          ? to.itself.getField(key.toString()).type.itself.resolved()
           : Type.noType().itself.resolved();
-      else if ('number' === typeof key)
+      else
         r = to.itself instanceof TypeTable
-          ? to.itself.getIndex(key).type.itself.resolved()
+          ? to.itself.getIndexer(key.type)[1].type.itself.resolved()
           : Type.noType().itself.resolved();
-      else throw "not implemented: __index by type";
 
       return this.nextResolve(r);
     }
@@ -120,13 +119,13 @@ export abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
     public override resolve(to: Resolved) {
       const [key, value] = this.args;
 
-      if ('string' === typeof key) {
+      if ('string' === typeof key || 'number' === typeof key) {
         if (to.itself instanceof TypeTable)
-          to.itself.setField(key, value);
-      } else if ('number' === typeof key) {
+          to.itself.setField(key.toString(), value);
+      } else {
         if (to.itself instanceof TypeTable)
-          to.itself.setIndex(key, value);
-      } else throw "not implemented: __newindex by type";
+          to.itself.setIndexer(key.type, value);
+      }
 
       return this.nextResolve(to);
     }

@@ -193,7 +193,7 @@ export class TypeVararg extends TypeTuple {
 export class TypeTable extends BaseType {
 
   private fields: Record<string, VarInfo> = {};
-  private indices: Array<VarInfo> = [];
+  private indexers: Array<[Type, VarInfo]> = [];
 
   /** set an entry of known (string) name */
   public setField(field: string, info: VarInfo) {
@@ -209,14 +209,15 @@ export class TypeTable extends BaseType {
   // may be more appropriate for a tuple type; here would rather
   // have a setTyped/getTyped with the type being 'number' or something...
 
-  /** set an entry of known (numeric) index */
-  public setIndex(index: number, type: VarInfo) {
-    this.indices[index] = type;
+  /** set an entry of known (type) indexer */
+  public setIndexer(indexer: Type, info: VarInfo) {
+    this.indexers.push([indexer, info]);
   }
 
-  /** get an entry of known (numeric) index */
-  public getIndex(index: number): VarInfo {
-    return this.indices[index] ?? Type.noType();
+  /** get an entry of known (type) indexer */
+  public getIndexer(indexer: Type): [Type, VarInfo] {
+    return this.indexers.find(it => it[0] === indexer) // XXX/TODO!!!!: type comparison (ie. "assignable to")
+      ?? [indexer, { type: Type.noType() }];
   }
 
   public override toString() {
@@ -225,18 +226,24 @@ export class TypeTable extends BaseType {
     for (const key in this.fields)
       r.push(`${key}: ${this.fields[key].type.itself}`);
 
-    // TODO: should deal with table-as-list better
-    for (let k = 0; k < this.indices.length; k++)
-      if (this.indices[k])
-        r.push(`[${k}]: ${this.indices[k].type.itself}`);
+    this.indexers.forEach(([indexer, info]) =>
+      r.push(`[${indexer}]: ${info.type.itself}`)
+    );
 
     return r.length ? `{ ${r.join(", ")} }` : "{}";
   }
 
   public override toJSON() {
     return {
-      fields: Object.fromEntries(Object.entries(this.fields).map(([k, v]) => [k, v.type.toJSON(k)])),
-      indices: this.indices.map((it, k) => it.type.itself.toJSON(k.toString())),
+      fields: Object
+        .fromEntries(Object
+          .entries(this.fields)
+          .map(([k, v]) => [k, v.type.toJSON(k)])
+        ),
+      indexers: this.indexers.map(([indexer, info]) => {
+        const repr = indexer.toString();
+        return [repr, info.type.itself.toJSON(repr)];
+      }),
     };
   }
 
@@ -250,13 +257,12 @@ export class TypeTable extends BaseType {
         doc: this.fields[key].doc,
       });
 
-    // TODO: should deal with table-as-list better
-    for (let k = 0; k < this.indices.length; k++)
-      if (this.indices[k])
-        tableType.setIndex(k, {
-          type: this.indices[k].type.itself.resolved(),
-          doc: this.indices[k].doc,
-        });
+    this.indexers.forEach(([indexer, info]) =>
+      tableType.setIndexer(indexer, { // YYY: .resolved()?
+        type: info.type.itself.resolved(),
+        doc: info.doc,
+      })
+    );
 
     return BaseType.mark(r);
   }

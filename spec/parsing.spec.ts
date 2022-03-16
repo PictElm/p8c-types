@@ -169,10 +169,10 @@ function results() {
   ],
   "typeof": [[{"TypeSome": "1"}, {"from": "2", "done": null}, "bla"], []],
   "tables": [
-    [{"TypeTable": "1"}, {"fields": "2", "indices": "3"}, {}, []],
+    [{"TypeTable": "1"}, {"fields": "2", "indexers": "3"}, {}, []],
     [
       {"TypeTable": "1"},
-      {"fields": "2", "indices": "3"},
+      {"fields": "2", "indexers": "3"},
       {"a": "4", "b": "5"},
       [],
       {"TypeNumber": null},
@@ -180,15 +180,15 @@ function results() {
     ],
     [
       {"TypeTable": "1"},
-      {"fields": "2", "indices": "3"},
+      {"fields": "2", "indexers": "3"},
       {"c": "4"},
       [],
       {"TypeTable": "5"},
-      {"fields": "6", "indices": "7"},
+      {"fields": "6", "indexers": "7"},
       {"z": "8"},
       [],
       {"TypeTable": "9"},
-      {"fields": "10", "indices": "11"},
+      {"fields": "10", "indexers": "11"},
       {},
       []
     ]
@@ -298,7 +298,7 @@ function results() {
       {"TypeTable": "9"},
       "o",
       {"TypeSome": "10"},
-      {"fields": "11", "indices": "12"},
+      {"fields": "11", "indexers": "12"},
       {"from": "7", "done": null},
       {"it": "13"},
       [],
