@@ -21,11 +21,13 @@ function indentation() {
 
 function main(args: string[]) {
   try {
-    const stt = { index: 0 };
-    const str = "(p: <p>) -> [<p>] some kind of cool type";
-    const res = Parser.parseType(str, stt); //parseType(str, stt);
-    log.event(res && JSON.parse(JSON.stringify(res)));
-    log.event(str.slice(stt.index));
+    const source = "";
+    const state = { index: 0 };
+    const type = Parser.parseType(source, state);
+
+    const pojo = JSON.parse(JSON.stringify(type));
+    log.event(pojo);
+    log.event(source.slice(state.index));
   } catch (err) {
     if (err instanceof Parser.SyntaxError)
       log.event(err.message);

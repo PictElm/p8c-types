@@ -1,4 +1,5 @@
 
+/* istanbul ignore next */
 export class log {
 
   /** 'info' > 'warn' > 'err' > 'none' */

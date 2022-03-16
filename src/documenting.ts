@@ -71,6 +71,7 @@ export class Metadata {
     return last.end.line + 1 === range.start.line;
   }
 
+  /* istanbul ignore next */
   public toString() { return `Metadata@_id${this._id}`; }
 
 }
@@ -205,6 +206,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
         indices: TypeTable['indices'],
       } | undefined;
 
+    // YYY: types spanning multiple lines..?
     text.split("\n").forEach((line, k) => {
       // find if startswith a tag
       //   if not, simple documentation, entry.pushDescription()

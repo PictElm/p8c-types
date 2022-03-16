@@ -71,6 +71,7 @@ export class Type {
   /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
+  /* istanbul ignore next */
   public toString() { return `Type@_id${this._id}`; }
   public toJSON(key: string) { const name = this.itself.constructor.name; return { [name]: this.itself.toJSON(name) } };
 

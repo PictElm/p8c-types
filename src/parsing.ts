@@ -1,6 +1,7 @@
 import { VarInfo } from './scoping';
 import { Type, TypeAlias, TypeBoolean, TypeFunction, TypeIntersection, TypeLiteralBoolean, TypeLiteralNumber, TypeLiteralString, TypeNil, TypeNumber, TypeSome, TypeString, TypeTable, TypeThread, TypeTuple, TypeUnion, TypeVararg } from './typing';
 
+/* istanbul ignore next */
 /**
  * tries to parse a type a the beginning of `source`
  * @param state if given, acts both as a starting point and to indicate where it stopped
@@ -31,7 +32,10 @@ type Token = { type: Types, value: string | number | boolean };
 export class Parser {
 
   protected token: Token = { type: Types.OTHER, value: "<dne>" };
+
+  protected previousSource = this.source;
   protected previousIndex = this.state.index;
+  protected previousToken = this.token;
 
   /**
    * ```bnf
@@ -60,7 +64,9 @@ export class Parser {
   protected constructor(
     protected source: string,
     protected readonly state: { index: number },
-  ) { }
+  ) {
+    this.source = source.slice(state.index);
+  }
 
   public static SyntaxError = class extends Error { };
 
@@ -68,7 +74,6 @@ export class Parser {
     const parser = new Parser(source, state);
     parser.next();
     const r = parser.parse(true);
-    parser.state.index = parser.previousIndex;
     return r;
   }
 
@@ -85,7 +90,7 @@ export class Parser {
         // case "function": type = Type.make(TypeFunction); break; // TODO: TypeAnyFunction
         // case "thread":   type = Type.make(TypeThread);   break; // TODO: TypeAnyThread
         /* istanbul ignore next */
-        default: throw new Parser.SyntaxError("non exhaustive handling of simple types");
+        default: throw new Error("non exhaustive handling of simple types");
       }
     }
 
@@ -95,7 +100,7 @@ export class Parser {
         case Types.LITERAL_NUMBER:  type = Type.make(TypeLiteralNumber, this.token.value as number);   break;
         case Types.LITERAL_STRING:  type = Type.make(TypeLiteralString, this.token.value as string);   break;
         /* istanbul ignore next */
-        default: throw new Parser.SyntaxError("non exhaustive handling of literal types");
+        default: throw new Error("non exhaustive handling of literal types");
       }
     }
 
@@ -127,6 +132,7 @@ export class Parser {
 
               this.next();
               asTable.setField(`${name}`, { type: this.parse(true) });
+              this.next();
             }
 
             // "[" <name> ":" <simple> "]" ":" <type>
@@ -151,6 +157,7 @@ export class Parser {
               this.next();
               // XXX/TODO: indexing by type
               asTable.setField(`[${name ?? ""}: ${this.token.value}]`, { type: this.parse(true) });
+              this.next();
             }
 
           } while ("," === this.token.value);
@@ -164,8 +171,10 @@ export class Parser {
           do { // while ","
 
             this.next();
-            if ("]" !== this.token.value)
+            if ("]" !== this.token.value) {
               types.push(this.parse(true));
+              this.next();
+            }
 
           } while ("," === this.token.value);
 
@@ -187,6 +196,7 @@ export class Parser {
           if (")" !== this.token.value && "..." !== this.token.value) {
             // <name> ":" <type> | "..." [":" <tuple>] | <type>
             mayType = this.parse(true);
+            this.next();
             asAlias = mayType.as(TypeAlias);
           }
 
@@ -212,6 +222,7 @@ export class Parser {
                   names.push(wasName);
                   this.next();
                   infos.push({ type: this.parse(true) });
+                  this.next();
                 }
 
                 // "..." [":" <tuple>]
@@ -222,6 +233,7 @@ export class Parser {
                     this.next();
                     const shouldTuple = this.parse(true).as(TypeTuple);
                     if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
+                    this.next();
 
                     vararg = { type: Type.make(TypeVararg, shouldTuple.getTypes()) };
                   }
@@ -325,16 +337,19 @@ export class Parser {
     if ("&" === this.token.value) {
       this.next();
       type = Type.make(TypeIntersection, type, this.parse(false));
-
-      // this.next();
+      this.next();
     }
 
     // "|" <type>
     if (canUnion && "|" === this.token.value) {
       this.next();
       type = Type.make(TypeUnion, type, this.parse(true));
+      this.next();
     }
 
+    this.source = this.previousSource;
+    this.state.index = this.previousIndex;
+    this.token = this.previousToken;
     return type;
   }
 
@@ -345,13 +360,15 @@ export class Parser {
   }
 
   protected next() {
+    this.previousSource = this.source;
     this.previousIndex = this.state.index;
+    this.previousToken = this.token;
     this.token = this.lex();
   }
 
-  protected expected(oneOf: string[], got?: string): never {
-    const a = 1 === oneOf.length ? oneOf[0] : `one of ${oneOf.join(", ")}`;
-    const b = `"${got ?? this.token.value}"`;
+  protected expected(oneOf: string[]): never {
+    const a = 1 === oneOf.length ? oneOf[0] : `one of "${oneOf.join('", "')}"`;
+    const b = `"${this.token.value}"`;
     throw new Parser.SyntaxError(`expected ${a}; got ${b}`);
   }
 
@@ -402,13 +419,22 @@ export class Parser {
       return { type: Types.LITERAL_STRING, value };
     }
 
-    // scan literal number
+    // scan literal number (YYY: integers only)
 
-    if (47 < char && char < 58) { // '0'-1  '9'+1
+    if (47 < char && char < 58 || 43 === char || 45 === char) { // '0'-1  '9'+1  '-'  '+'
+      const sign = 43 === char ? "-" : "";
+      if (43 === char || 45 === char) this.advance(1);
+
       const base = 48 === char && { b: 2, o: 8, x: 16 }[this.source[1]] || 10;
-      const raw = this.source.match(/^\d[box]?\d+/)![0];
-      this.advance(raw?.length);
-      return { type: Types.LITERAL_NUMBER, value: parseInt(10 === base ? raw : raw.slice(2), base) };
+      let raw = "", abs = "";
+      /* istanbul ignore else // unreachable */
+      if (10 === base) raw = abs = this.source.match(/^\s*[0-9]+/)![0];
+      else if (16 === base) [raw, abs] = this.source.match(/^\s*0x([0-9A-Fa-f])?/)!;
+      else if (2 === base) [raw, abs] = this.source.match(/^\s*0b([01])?/)!;
+      else if (8 === base) [raw, abs] = this.source.match(/^\s*0o([0-7])?/)!;
+
+      this.advance(raw.length);
+      return { type: Types.LITERAL_NUMBER, value: parseInt(sign + (abs ?? 0), base) };
     }
 
     // scan simple, alias, literal nil and literal boolean)
@@ -430,7 +456,7 @@ export class Parser {
       };
     }
 
-    return { type: Types.OTHER, value: this.source.match(/^\S+/)?.[0] ?? "something" };
+    return { type: Types.OTHER, value: this.source.match(/^\S+/)![0] };
   }
 //#endregion
 

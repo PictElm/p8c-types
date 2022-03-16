@@ -68,6 +68,7 @@ class Scope {
   public open(start: Location) { this.range = new Range(start, this.range.end); }
   public close(end: Location) { this.range = new Range(this.range.start, end); }
 
+  /* istanbul ignore next */
   public toString() { return `Scope@_id${this._id}`; }
 
   /**
