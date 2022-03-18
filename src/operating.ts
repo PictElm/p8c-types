@@ -1,6 +1,81 @@
 import assert from 'assert';
 import { VarInfo } from './scoping';
-import { Resolved, Type, TypeFunction, TypeTable } from './typing';
+import { Resolved, Type, TypeFunction, TypeSome, TypeTable } from './typing';
+
+// export type MetaOpNames = { [T in keyof typeof MetaOp]: typeof MetaOp[T] };
+
+export namespace MetaOp {
+
+  export function __add(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __sub(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __mul(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __div(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __mod(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __pow(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __concat(left: VarInfo, right: VarInfo): unknown { return null!; }
+
+  export function __unm(self: VarInfo): unknown { return null!; }
+
+  export function __len(self: VarInfo): unknown { return null!; }
+
+  export function __eq(left: VarInfo, right: VarInfo) { }
+
+  export function __lt(left: VarInfo, right: VarInfo) { }
+
+  export function __le(left: VarInfo, right: VarInfo) { }
+
+  export function __index(self: VarInfo, key: string | number | VarInfo): VarInfo {
+    return self.type.itself instanceof TypeTable
+      ? self.type.itself.getField(key as string)
+      : self.type.itself instanceof TypeSome
+        ? self.type.itself.getApplied(new TypeSomeOp.__index(key))
+        : { type: Type.noType() };
+  }
+
+  export function __newindex(self: VarInfo, key: string | number | VarInfo, value: VarInfo) {
+    if (self.type.itself instanceof TypeTable)
+      self.type.itself.setField(key as string, value);
+    else if (self.type.itself instanceof TypeSome)
+      self.type.itself.setApplied(new TypeSomeOp.__newindex(key, value));
+  }
+
+  export function __call(self: VarInfo, parameters: VarInfo[]): VarInfo[] { // XXX: TypeTuple? rework TypeTuple to carry a `VarInfo`s instead of `Type`s
+    return self.type.itself instanceof TypeFunction
+        ? self.type.itself.getReturns(parameters)
+        : self.type.itself instanceof TypeSome
+          ? [self.type.itself.getApplied(new TypeSomeOp.__call(parameters))] // XXX: tuple gap
+          : [{ type: Type.noType() }];
+  }
+
+}
+
+export namespace MetaOp {
+
+  export function __metatable(...args: unknown[]): VarInfo { return null!; } // TypeTable // YYY: not implemented
+
+  export function __ipairs(...args: unknown[]): VarInfo { return null!; } // TypeFunction // YYY: not implemented
+
+  export function __pairs(...args: unknown[]) { } // TypeFunction     // YYY: not implemented
+
+  export function __tostring(...args: unknown[]) { } // TypeString    // YYY: not implemented
+
+}
+
+//export namespace MetaOp {
+//
+//  export function __cocreate(...args: unknown[]): unknown { return null!; }
+//
+//  export function __coresume(...args: unknown[]): unknown { return null!; }
+//
+//  export function __costatus(...args: unknown[]): unknown { return null!; }
+//
+//}
 
 /**
  * represents an operation performed on an unknown type

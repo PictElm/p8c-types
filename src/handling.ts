@@ -4,7 +4,7 @@ import { TypedEmitter } from 'tiny-typed-emitter';
 import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { TypeSomeOp } from './operating';
+import { MetaOp } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
 import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg } from './typing';
 
@@ -123,14 +123,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.set(it.name, initInfo);
           this.scope.locate(Range.fromNode(it), it.name, initInfo, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
-          const mayTable = this.handle(it.base)[0].type.itself;
+          const mayTableInfo = this.handle(it.base)[0];
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initInfo, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
-          if (mayTable instanceof TypeTable)
-            mayTable.setField(it.identifier.name, initInfo);
-          else if (mayTable instanceof TypeSome)
-            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, initInfo));
+          MetaOp.__newindex(mayTableInfo, it.identifier.name, initInfo);
         }
       });
 
@@ -201,14 +198,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.set(it.name, info); // XXX: locality gap
           this.scope.locate(Range.fromNode(it), it.name, info, LocateReason.Write);
         } else { // MemberExpression
-          const mayTable = this.handle(it.base)[0].type.itself;
+          const mayTableInfo = this.handle(it.base)[0];
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, info, LocateReason.Write);
 
           // XXX: more of the '.' === it.indexer
-          if (mayTable instanceof TypeTable)
-            mayTable.setField(it.identifier.name, info);
-          else if (mayTable instanceof TypeSome)
-            mayTable.setApplied(new TypeSomeOp.__newindex(it.identifier.name, info));
+          MetaOp.__newindex(mayTableInfo, it.identifier.name, info);
         }
       }
 
@@ -262,13 +256,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     LogicalExpression: node => [],
     UnaryExpression: node => [],
     MemberExpression: node => {
-      const baseType = this.handle(node.base)[0].type.itself;
+      const baseInfo = this.handle(node.base)[0];
 
-      const r = baseType instanceof TypeTable
-        ? baseType.getField(node.identifier.name)
-        : baseType instanceof TypeSome
-          ? baseType.getApplied(new TypeSomeOp.__index(node.identifier.name))
-          : { type: Type.noType() };
+      const r = MetaOp.__index(baseInfo, node.identifier.name);
 
       this.scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
 
@@ -281,7 +271,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     // -> type[]
     CallExpression: node => {
       const base = node.base;
-      const baseType = this.handle(base)[0].type.itself;
+      const baseInfo = this.handle(base)[0];
 
       const parameters = node.arguments
         .slice(0, -1)
@@ -289,11 +279,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       if (node.arguments.length)
         parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
 
-      return baseType instanceof TypeFunction
-        ? baseType.getReturns(parameters)
-        : baseType instanceof TypeSome
-          ? [baseType.getApplied(new TypeSomeOp.__call(parameters))] // XXX: tuple gap
-          : [{ type: Type.noType() }];
+      return MetaOp.__call(baseInfo, parameters);
     },
     TableCallExpression: node => [],
     StringCallExpression: node => [],
