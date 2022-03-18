@@ -96,8 +96,16 @@ class Scope {
 
 }
 
+/* ignore next? */
 /** the various types of context */
 namespace Context {
+  // TODO:
+  //  'FunctionCall' theFunction
+  //  'FunctionCallArgument' index?
+  //  'TableConstructor' theTable
+  //  'TableConstructorKey' key, something
+  //  'TableConstructorKeyString' key, something
+  //  'TableConstructorKeyValue' autoIndex, something
 
   abstract class Base<Tag extends string> {
     protected constructor(public readonly tag: Tag) { }

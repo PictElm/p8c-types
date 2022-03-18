@@ -148,7 +148,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
       const [parameters] = this.args;
       return this.nextResolve(
         to.itself instanceof TypeFunction
-          ? to.itself.getReturns(parameters)[0].type.itself.resolved() // XXX: tuple gap
+          ? to.itself.getReturns(parameters).type.itself.resolved()
           : Type.noType().itself.resolved()
       );
     }
@@ -254,7 +254,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
     },
     __call(self, parameters) {
       const asSome = self.type.as(TypeSome)!;
-      return [asSome.getApplied(new TypeSomeOp.__call(parameters))]; // XXX: tuple gap
+      return asSome.getApplied(new TypeSomeOp.__call(parameters));
     }
   };
 

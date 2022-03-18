@@ -7,7 +7,7 @@ import { Type, TypeAlias, TypeBoolean, TypeFunction, TypeIntersection, TypeLiter
  * @param state if given, acts both as a starting point and to indicate where it stopped
  * 
  * for a parsing with error handling, use the underlying Parser.parse directly
- * @see Parser.parse
+ * @see Parser#parse
  */
 export function parseType(source: string, state?: { index: number }): Type | undefined {
   try { return Parser.parseType(source, state ?? { index: 0 }); } catch (err) { }
@@ -168,13 +168,13 @@ export class Parser {
         } break;
 
         case "[": { // tuple
-          const types: Type[] = [];
+          const types: VarInfo[] = [];
 
           do { // while ","
 
             this.next();
             if ("]" !== this.token.value) {
-              types.push(this.parse(true));
+              types.push({ type: this.parse(true) });
               this.next();
             }
 
@@ -293,14 +293,10 @@ export class Parser {
             // "->" <tuple>
             if ("->" === this.token.value && 1 === signatures.length) {
               this.next();
-              const shouldTuple = this.parse(true).as(TypeTuple);
-              if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
+              const retType = this.parse(true);
 
               type = Type.make(TypeFunction, signatures[0]);
-              type.as(TypeFunction)!
-                .setReturns(shouldTuple
-                  .getTypes().map(type => ({ type }))
-                );
+              type.as(TypeFunction)!.setReturns({ type: retType });
             }
 
             // "~*"

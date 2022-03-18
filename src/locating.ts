@@ -126,7 +126,7 @@ export class Range {
 
   /**
    * &lt;start location>&lt;separator>&lt;end location>
-   * @see Location.toString
+   * @see Location#toString
    */
   public toString(separator: string = " - ", hideUri: boolean): string {
     return this.start.toString(hideUri) + separator + this.end.toString(hideUri);

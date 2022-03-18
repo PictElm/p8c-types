@@ -6,10 +6,10 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { MetaOps } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
-import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg } from './typing';
+import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
-type Handler<T> = (node: T) => VarInfo[]
+type Handler<T> = (node: T) => VarInfo;
 
 interface HandlingEvents {
 
@@ -40,7 +40,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
    * 
    * @throws when node is of an unknown type
    */
-  public handle<T extends ast.Node>(node: T): VarInfo[] | never {
+  public handle<T extends ast.Node>(node: T): VarInfo | never {
     assert(node, "Handling.handle: trying to handle an undefined node");
     this.emit('handle', node);
     const h = this.handlers[node.type] as Handler<T> | undefined;
@@ -48,27 +48,41 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     return h(node);
   }
 
+  private exprListTypes(expressions: ast.Expression[]): VarInfo[] {
+    const r = expressions
+      .slice(0, -1)
+      .map(it => this.handle(it));
+
+    if (expressions.length) {
+      const mayTupleInfo = this.handle(expressions[expressions.length-1]);
+      const mayTupleType = mayTupleInfo.type.as(TypeTuple);
+
+      if (mayTupleType) r.push(...mayTupleType.getTypes());
+      else r.push(mayTupleInfo);
+    }
+
+    return r;
+  }
+
   // TODO: would like to make it possible to insert your own handlers,
   // this can be done using the 'handle' even for now
   // but it does not enable "preventDefault" kind of thing
   private readonly handlers: { [TT in ast.Node['type']]?: Handler<FindByTType<ast.Node, TT>> } = {
     // -> never
-    LabelStatement: node => [],
-    BreakStatement: node => [],
-    GotoStatement: node => [],
+    LabelStatement: node => null!,
+    BreakStatement: node => null!,
+    GotoStatement: node => null!,
     ReturnStatement: node => {
-      const infos = node.arguments
-        .slice(0, -1)
-        .map(it => this.handle(it)[0]);
-      if (node.arguments.length)
-        infos.push(...this.handle(node.arguments[node.arguments.length-1]));
+      const infos = this.exprListTypes(node.arguments);
 
       const theFunction = this.scope.findContext('Function').theFunction;
-      theFunction.as(TypeFunction)?.setReturns(infos);
+      theFunction.as(TypeFunction)?.setReturns(infos.length
+        ? { type: Type.make(TypeTuple, infos) }
+        : infos[0]);
 
-      return [];
+      return null!;
     },
-    IfStatement: node => [],
+    IfStatement: node => null!,
     WhileStatement: node => {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
@@ -82,7 +96,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.popContext(endLocation, 'While');
       this.scope.join(endLocation, true, false);
 
-      return [];
+      return null!;
     },
     DoStatement: node => {
       const startLocation = Location.fromNodeStart(node);
@@ -94,20 +108,16 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.popContext(endLocation, 'Do');
       this.scope.join(endLocation, true, true);
 
-      return [];
+      return null!;
     },
-    RepeatStatement: node => [],
+    RepeatStatement: node => null!,
     LocalStatement: node => {
       return this.handlers['AssignmentStatement']!(node as any); // XXX!
       // diff with simple AssignmentStatement is new names shadow previous
       // if ('Identifier' === it.type) { .. update in local scope .. }
     },
     AssignmentStatement: node => {
-      const infos = node.init
-        .slice(0, -1)
-        .map(it => this.handle(it)[0]);
-      if (node.init.length) // XXX: maybe temporary (LocalStatement redirects here, may have no init)
-        infos.push(...this.handle(node.init[node.init.length-1]));
+      const infos = this.exprListTypes(node.init);
 
       node.variables.forEach((it, k) => {
         const initInfo = infos[k] ?? { type: Type.noType() };
@@ -123,7 +133,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.set(it.name, initInfo);
           this.scope.locate(Range.fromNode(it), it.name, initInfo, LocateReason.Write);
         } else if ('MemberExpression' === it.type) {
-          const mayTableInfo = this.handle(it.base)[0];
+          const mayTableInfo = this.handle(it.base);
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initInfo, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
@@ -131,9 +141,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       });
 
-      return [];
+      return null!;
     },
-    AssignmentOperatorStatement: node => [],
+    AssignmentOperatorStatement: node => null!,
     CallStatement: node => {
       const expr = node.expression;
       const base = expr.base;
@@ -157,10 +167,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
       this.handle(node.expression);
 
-      return [];
+      return null!;
     },
-    ForNumericStatement: node => [],
-    ForGenericStatement: node => [],
+    ForNumericStatement: node => null!,
+    ForGenericStatement: node => null!,
 
     // -> type | never
     FunctionDeclaration: node => {
@@ -198,7 +208,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.set(it.name, info); // XXX: locality gap
           this.scope.locate(Range.fromNode(it), it.name, info, LocateReason.Write);
         } else { // MemberExpression
-          const mayTableInfo = this.handle(it.base)[0];
+          const mayTableInfo = this.handle(it.base);
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, info, LocateReason.Write);
 
           // XXX: more of the '.' === it.indexer
@@ -206,20 +216,20 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
-      return it ? [] : [info];
+      return it ? null! : info;
     },
     // -> type
     Identifier: node => {
       const info = this.scope.get(node.name);
       this.scope.locate(Range.fromNode(node), node.name, info, LocateReason.Read);
-      return [info];
+      return info;
     },
-    StringLiteral: node => [{ type: Type.make(TypeString) }],
-    NumericLiteral: node => [{ type: Type.make(TypeNumber) }],
-    BooleanLiteral: node => [{ type: Type.make(TypeBoolean) }],
-    NilLiteral: node => [{ type: Type.make(TypeNil) }],
+    StringLiteral: node => ({ type: Type.make(TypeString) }),
+    NumericLiteral: node => ({ type: Type.make(TypeNumber) }),
+    BooleanLiteral: node => ({ type: Type.make(TypeBoolean) }),
+    NilLiteral: node => ({ type: Type.make(TypeNil) }),
     // -> type[]
-    VarargLiteral: node => [],
+    VarargLiteral: node => ({ type: Type.make(TypeVararg) }), // TODO: get context, use context (, update context?)
     // -> type
     TableConstructorExpression: node => {
       const info = { type: Type.make(TypeTable) };
@@ -230,33 +240,33 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         switch (it.type) {
           case 'TableKey': {
             // NOTE: need to change where says xyzType and its the `itself`
-            const keyType = this.handle(it.key)[0].type;
-            const valueInfo = this.handle(it.value)[0];
+            const keyType = this.handle(it.key).type;
+            const valueInfo = this.handle(it.value);
             tableType.setIndexer(keyType, valueInfo);
             // TODO: what about multiple entries with the same keyType?!
           } break;
 
           case 'TableKeyString': {
-            tableType.setField(it.key.name, this.handle(it.value)[0]);
+            tableType.setField(it.key.name, this.handle(it.value));
           } break;
 
           case 'TableValue': {
             // TODO: should deal with table-as-list better
             // (+ this does not differentiate between equivalent number and string keys)
-            tableType.setField(""+ ++autoIndex, this.handle(it.value)[0]);
+            tableType.setField(""+ ++autoIndex, this.handle(it.value));
             // also need to handle last TableValue entry ^^
           } break;
         }
       });
 
-      return [info];
+      return info;
     },
     // -> type
-    BinaryExpression: node => [],
-    LogicalExpression: node => [],
-    UnaryExpression: node => [],
+    BinaryExpression: node => null!,
+    LogicalExpression: node => null!,
+    UnaryExpression: node => null!,
     MemberExpression: node => {
-      const baseInfo = this.handle(node.base)[0];
+      const baseInfo = this.handle(node.base);
 
       const r = MetaOps.__index(baseInfo, node.identifier.name);
 
@@ -265,29 +275,25 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       // XXX: if ('.' === node.indexer) assumed for now
       // baseType may change (right? with removing first param?)
 
-      return [r];
+      return r;
     },
-    IndexExpression: node => [],
+    IndexExpression: node => null!,
     // -> type[]
     CallExpression: node => {
       const base = node.base;
-      const baseInfo = this.handle(base)[0];
+      const baseInfo = this.handle(base);
 
-      const parameters = node.arguments
-        .slice(0, -1)
-        .map(it => this.handle(it)[0]);
-      if (node.arguments.length)
-        parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
+      const parameters = this.exprListTypes(node.arguments);
 
       return MetaOps.__call(baseInfo, parameters);
     },
-    TableCallExpression: node => [],
-    StringCallExpression: node => [],
+    TableCallExpression: node => null!,
+    StringCallExpression: node => null!,
 
     // -> never
-    IfClause: node => [],
-    ElseifClause: node => [],
-    ElseClause: node => [],
+    IfClause: node => null!,
+    ElseifClause: node => null!,
+    ElseClause: node => null!,
     Chunk: node => {
       node.comments?.forEach(it => this.handle(it));
 
@@ -300,15 +306,15 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.popContext(endLocation, 'Do');
       this.scope.join(endLocation, false);
 
-      return [];
+      return null!;
     },
-    TableKey: node => [],
-    TableKeyString: node => [],
-    TableValue: node => [],
+    TableKey: node => null!,
+    TableKeyString: node => null!,
+    TableValue: node => null!,
     Comment: node => {
       if (node.value.startsWith("-")) // doc comments starts with a -
         this.doc.process(Range.fromNode(node), node.value.slice(1));
-      return [];
+      return null!;
     },
   };
 

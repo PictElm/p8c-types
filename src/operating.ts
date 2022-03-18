@@ -104,9 +104,9 @@ export namespace MetaOps {
     self.type.itself.metaOps.__newindex?.(self, key, value);
   }
 
-  export function __call(self: VarInfo, parameters: VarInfo[]): VarInfo[] { // XXX: TypeTuple? rework TypeTuple to carry a `VarInfo`s instead of `Type`s
+  export function __call(self: VarInfo, parameters: VarInfo[]): VarInfo {
     return self.type.itself.metaOps.__call?.(self, parameters)
-      ?? [{ type: Type.noType() }];
+      ?? { type: Type.noType() };
   }
 
 }
