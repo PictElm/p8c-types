@@ -109,7 +109,7 @@ function getInputs(): Record<string, string[]> {
       "(a: number, ...) -> [string, string | nil, string]",
       "(a: number, *-*) -> []         -- FAILS",
       "(...: [a, b, c]) -> [boolean]",
-      "(o: <o>) -> [{ it: <o> }]", // XXX
+      "(o: <o>) -> [{ it: <o> }]",
     ],
     "threads": [
       "() ~*",

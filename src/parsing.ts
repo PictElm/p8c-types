@@ -37,6 +37,8 @@ export class Parser {
   protected previousIndex = this.state.index;
   protected previousToken = this.token;
 
+  protected typeof: Record<string, Type | undefined> = {};
+
   /**
    * ```bnf
    * <simple> ::= "nil" | "boolean" | "number" | "string" | "table" | "function" | "thread"
@@ -319,7 +321,9 @@ export class Parser {
           this.next();
           if (Types.ALIAS !== this.token.type) this.expected(["<name>"]);
 
-          type = Type.make(TypeSome, `${this.token.value}`);
+          const asString = `${this.token.value}`;
+          type = this.typeof[asString]
+            ?? (this.typeof[asString] = Type.make(TypeSome, asString));
           this.next();
 
           this.expect(">");
