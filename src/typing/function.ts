@@ -1,3 +1,4 @@
+import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
 import { BaseType, Resolved, Type, TypeSome } from './internal';
 
@@ -103,5 +104,12 @@ export class TypeFunction extends BaseType {
 
     return BaseType.mark(r);
   }
+
+  public override metaOps: Partial<MetaOpsType> = {
+    __call(self, parameters) {
+      const asFunction = self.type.as(TypeFunction)!;
+      return asFunction.getReturns(parameters);
+    },
+  };
 
 }

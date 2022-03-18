@@ -1,3 +1,4 @@
+import { MetaOpsType } from '../operating';
 import { BaseType, Resolved, Type } from './internal';
 
 export class TypeNil extends BaseType {
@@ -21,6 +22,12 @@ export class TypeNumber extends BaseType {
   public override toString() { return "number"; }
   public override toJSON() { return null; }
   public override resolved(): Resolved { return BaseType.mark(Type.make(TypeNumber)); }
+
+  public override metaOps: Partial<MetaOpsType> = {
+    __add(left, right) {
+      return { type: Type.make(TypeNumber) };
+    },
+  };
 
 }
 
@@ -61,14 +68,27 @@ export class TypeLiteralBoolean extends BaseTypeLiteral<boolean> {
 
 }
 
-export class TypeLiteralNumber extends BaseTypeLiteral<number> {
+export class TypeLiteralNumber extends TypeNumber {
+
+  constructor(outself: Type, protected value: number) { super(outself); }
 
   public override toString() { return this.value.toString(); }
-  public override toJSON() { return this.value; }
+  public override toJSON(): any { return this.value; }
 
   public resolved(): Resolved {
     return BaseType.mark(Type.make(TypeLiteralNumber, this.value));
   }
+
+  public override metaOps: Partial<MetaOpsType> = {
+    __add(left, right) {
+      const mate = right.type.itself;
+      if (mate instanceof TypeLiteralNumber) {
+        const add = left.type.as(TypeLiteralNumber)!.value + mate.value;
+        return { type: Type.make(TypeLiteralNumber, add) };
+      }
+      return { type: Type.make(TypeNumber) };
+    },
+  };
 
 }
 

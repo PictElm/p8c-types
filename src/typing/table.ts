@@ -1,3 +1,4 @@
+import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
 import { BaseType, Resolved, Type } from './internal';
 
@@ -77,5 +78,21 @@ export class TypeTable extends BaseType {
 
     return BaseType.mark(r);
   }
+
+  // XXX/TODO: table metatable (yes, that exists)
+  public override metaOps: Partial<MetaOpsType> = {
+    __index(self, key) {
+      const asTable = self.type.as(TypeTable)!;
+      if ('string' === typeof key || 'number' === typeof key)
+        return asTable.getField(`${key}`);
+      return asTable.getIndexer(key.type)[1];
+    },
+    __newindex(self, key, value) {
+      const asTable = self.type.as(TypeTable)!;
+      if ('string' === typeof key || 'number' === typeof key)
+        asTable.setField(`${key}`, value);
+      else asTable.setIndexer(key.type, value);
+    },
+  };
 
 }

@@ -4,7 +4,7 @@ import { TypedEmitter } from 'tiny-typed-emitter';
 import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
-import { MetaOp } from './operating';
+import { MetaOps } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
 import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg } from './typing';
 
@@ -127,7 +127,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initInfo, LocateReason.Write);
 
           // XXX: again, assuming '.' === it.indexer
-          MetaOp.__newindex(mayTableInfo, it.identifier.name, initInfo);
+          MetaOps.__newindex(mayTableInfo, it.identifier.name, initInfo);
         }
       });
 
@@ -202,7 +202,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, info, LocateReason.Write);
 
           // XXX: more of the '.' === it.indexer
-          MetaOp.__newindex(mayTableInfo, it.identifier.name, info);
+          MetaOps.__newindex(mayTableInfo, it.identifier.name, info);
         }
       }
 
@@ -258,7 +258,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     MemberExpression: node => {
       const baseInfo = this.handle(node.base)[0];
 
-      const r = MetaOp.__index(baseInfo, node.identifier.name);
+      const r = MetaOps.__index(baseInfo, node.identifier.name);
 
       this.scope.locate(Range.fromNode(node.identifier), node.identifier.name, r, LocateReason.Read);
 
@@ -279,7 +279,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       if (node.arguments.length)
         parameters.push(...this.handle(node.arguments[node.arguments.length-1]));
 
-      return MetaOp.__call(baseInfo, parameters);
+      return MetaOps.__call(baseInfo, parameters);
     },
     TableCallExpression: node => [],
     StringCallExpression: node => [],

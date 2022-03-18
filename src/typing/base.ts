@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { Metadata } from '../documenting';
+import { MetaOpsType } from '../operating';
 import { TypeNil } from './internal';
 
 /**
@@ -17,6 +18,14 @@ export abstract class BaseType {
   public abstract toString(): string;
   public abstract toJSON(key: string): unknown;
   public abstract resolved(): Resolved;
+
+  /**
+   * entries of this object are to be called from the MetaOps namespace only!
+   * 
+   * @todo TODO: not quite like that, or the only way to properly extend and inherit
+   * is through `Object.create` (which may by fine, but maybe another way could be better)
+   */
+  public metaOps: Partial<MetaOpsType> = {};
 
   protected static mark(type: Type) {
     const r = type as Resolved;
@@ -63,7 +72,7 @@ export class Type {
     return r;
   }
 
-  public static noType() { return Type.make(TypeNil); }
+  public static noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
 
 }
 
