@@ -57,7 +57,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const mayTupleInfo = this.handle(expressions[expressions.length-1]);
       const mayTupleType = mayTupleInfo.type.as(TypeTuple);
 
-      if (mayTupleType) r.push(...mayTupleType.getTypes());
+      if (mayTupleType) r.push(...mayTupleType.getInfos());
       else r.push(mayTupleInfo);
     }
 
@@ -76,9 +76,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const infos = this.exprListTypes(node.arguments);
 
       const theFunction = this.scope.findContext('Function').theFunction;
-      theFunction.as(TypeFunction)?.setReturns(infos.length
-        ? { type: Type.make(TypeTuple, infos) }
-        : infos[0]);
+      theFunction.as(TypeFunction)!.setReturns(infos);
 
       return null!;
     },
@@ -262,9 +260,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       return info;
     },
     // -> type
-    BinaryExpression: node => null!,
-    LogicalExpression: node => null!,
-    UnaryExpression: node => null!,
+    BinaryExpression: node => { throw "not implemented yet: handling 'BinaryExpression'" },
+    LogicalExpression: node => { throw "not implemented yet: handling 'LogicalExpression'" },
+    UnaryExpression: node => { throw "not implemented yet: handling 'UnaryExpression'" },
     MemberExpression: node => {
       const baseInfo = this.handle(node.base);
 
@@ -277,7 +275,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
       return r;
     },
-    IndexExpression: node => null!,
+    IndexExpression: node => { throw "not implemented yet: handling 'IndexExpression'" },
     // -> type[]
     CallExpression: node => {
       const base = node.base;
@@ -287,8 +285,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
       return MetaOps.__call(baseInfo, parameters);
     },
-    TableCallExpression: node => null!,
-    StringCallExpression: node => null!,
+    TableCallExpression: node => { throw "not implemented yet: handling 'TableCallExpression'" },
+    StringCallExpression: node => { throw "not implemented yet: handling 'StringCallExpression'" },
 
     // -> never
     IfClause: node => null!,

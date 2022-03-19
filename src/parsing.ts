@@ -237,7 +237,7 @@ export class Parser {
                     if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
                     this.next();
 
-                    vararg = { type: Type.make(TypeVararg, shouldTuple.getTypes()) };
+                    vararg = { type: Type.make(TypeVararg, shouldTuple.getInfos()) };
                   }
 
                   // ")"
@@ -295,8 +295,10 @@ export class Parser {
               this.next();
               const retType = this.parse(true);
 
+              const asTupleInfos = retType.as(TypeTuple)?.getInfos();
+
               type = Type.make(TypeFunction, signatures[0]);
-              type.as(TypeFunction)!.setReturns({ type: retType });
+              type.as(TypeFunction)!.setReturns(asTupleInfos ?? [{ type: retType }]);
             }
 
             // "~*"

@@ -199,7 +199,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
 
     let buildingFunction: {
         parameters: TypeFunction['parameters'],
-        returns: TypeFunction['returns'],
+        returns: VarInfo[], //TypeFunction['returns'],
       } | undefined;
     let buildingTable: {
         fields: TypeTable['fields'],

@@ -50,7 +50,7 @@ describe("representing", () => {
     it("circular", () => {
       const params = { names: ["p"], infos: [{ type: Type.make(TypeSome, "p") }], vararg: null };
       const b = Type.make(TypeFunction, params).as(TypeFunction)!;
-      b.setReturns([b.getParameters().infos[0]]);
+      b.setReturns(b.getParameters().infos);
       expectString(b).to.equal("(p: <p>) -> [<p>]");
     });
 

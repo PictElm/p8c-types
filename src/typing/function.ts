@@ -5,7 +5,7 @@ import { TypeTuple } from './tuple';
 
 export class TypeFunction extends BaseType {
 
-  protected returns: VarInfo = { type: Type.noType() };
+  protected returns: VarInfo = { type: Type.make(TypeTuple, []) };
 
   public constructor(outself: Type,
     protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
@@ -17,8 +17,11 @@ export class TypeFunction extends BaseType {
   }
 
   /** update the returns (tuple) info */
-  public setReturns(infos: VarInfo) {
-    this.returns = infos;
+  public setReturns(infos: VarInfo[]) {
+    // XXX: unpack tuple here? (if info[0] instanceof TypTuple)
+    this.returns = 1 === infos.length
+      ? infos[0]
+      : { type: Type.make(TypeTuple, infos) };
   }
 
   /**
@@ -45,7 +48,7 @@ export class TypeFunction extends BaseType {
     const r = asTuple
       ? {
           type: Type.make(TypeTuple, asTuple
-            .getTypes()
+            .getInfos()
             .map(info => ({
               type: info.type.itself.resolved(),
               doc: info.doc,
@@ -81,12 +84,12 @@ export class TypeFunction extends BaseType {
       });
 
       returns = asTuple
-        .getTypes()
+        .getInfos()
         .map(info => `${info.type.itself}`)
         .join(", ");
 
       toRevert.forEach(type => type.revert());
-    } else returns+= this.returns.type;
+    } else returns = `${this.returns.type.itself}`;
 
     return `(${parameters}) -> [${returns}]`;
   }
@@ -107,7 +110,7 @@ export class TypeFunction extends BaseType {
 
     const asTuple = this.returns.type.as(TypeTuple);
     if (asTuple) {
-      const returns = asTuple.getTypes().map(ret => {
+      const returns = asTuple.getInfos().map(ret => {
         const k = this.parameters.infos.findIndex(par => par === ret);
         if (-1 < k) return functionType.parameters.infos[k]; // ret itself _is_ a param of this
 
@@ -116,8 +119,8 @@ export class TypeFunction extends BaseType {
         //  if a this param somewhere in the type description of ret,
         //  it needs to be replaced with the corresponding r param
       });
-      functionType.setReturns({ type: Type.make(TypeTuple, returns) });
-    } else functionType.setReturns(this.returns); // XXX: stray refs? (should something? copy?)
+      functionType.setReturns(returns);
+    } else functionType.setReturns([this.returns]); // XXX: stray refs? (should something? copy?)
 
     return BaseType.mark(r);
   }

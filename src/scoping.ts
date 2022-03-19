@@ -6,7 +6,7 @@ import { log } from './logging';
 import { Type, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
-export type VarInfo = { type: Type, doc?: Metadata };
+export type VarInfo = { type: Type, doc?: Metadata }; // (move to ./typing/base.ts?)
 
 /**
  * `variable` uses Object.create and prototype inheritance to
