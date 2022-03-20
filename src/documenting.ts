@@ -217,7 +217,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
       //     typing tags attempt to complete the entry's type
       //     other documentation tags are added to the entry.tags
 
-      const match = /^(\s*)@(\w+)(?:(\s+)(\S*)|$)/.exec(line);
+      const match = /^(\s*)@(\w+)(\s*)(.*?)\s*$/.exec(line);
       if (match) {
         const [_, before, tag, between, text] = match;
 

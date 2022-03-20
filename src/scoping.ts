@@ -2,7 +2,7 @@ import assert from 'assert';
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Metadata } from './documenting';
 import { Location, Range } from './locating';
-import { log } from './logging';
+//import { log } from './logging';
 import { Type, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
@@ -47,7 +47,7 @@ class Scope {
     for (const name in from.variables) {
       const old = this.variables[name];
       const niw = from.variables[name];
-      log.info(`[parent -> local] name: ${name} (${old?.type ?? "(not present)"} -> ${niw.type})`);
+      //log.info(`[parent -> local] name: ${name} (${old?.type ?? "(not present)"} -> ${niw.type})`);
 
       // if variable is not local
       if (old && !Object.is(niw, old)) {
@@ -232,12 +232,12 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   // }
 
   public set(name: string, variable: VarInfo) {
-    log.info(`[local scope]: setting "${name}: ${variable.type}"`);
+    //log.info(`[local scope]: setting "${name}: ${variable.type}"`);
     this.local.variables[name] = variable;
   }
 
   public get(name: string) {
-    log.info(`[local scope]: getting "${name}"`);
+    //log.info(`[local scope]: getting "${name}"`);
     return this.local.variables[name] ?? { type: Type.noType() };
   }
 

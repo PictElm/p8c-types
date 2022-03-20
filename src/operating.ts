@@ -1,5 +1,5 @@
 import { VarInfo } from './scoping';
-import { Type, TypeFunction, TypeLiteralNumber, TypeNumber, TypeSome, TypeTable } from './typing';
+import { Type, TypeNumber } from './typing';
 
 export type MetaOpsNames = { [T in keyof typeof MetaOps]: typeof MetaOps[T] };
 export type MetaOpsType = typeof MetaOps;
@@ -41,7 +41,7 @@ export namespace MetaOps {
     const o2 = right.type.itself;
 
     if (o1 instanceof TypeNumber && o2 instanceof TypeNumber)
-      return { type: Type.make(TypeNumber) };
+      return o1.metaOps.__add!(left, right);
 
     const h = o1.metaOps.__add ?? o2.metaOps.__add;
     if (h) return h(left, right);
@@ -117,9 +117,9 @@ export namespace MetaOps {
 
   export function __ipairs(...args: unknown[]): VarInfo { return null!; } // TypeFunction // YYY: not implemented
 
-  export function __pairs(...args: unknown[]): unknown { return null!; } // TypeFunction     // YYY: not implemented
+  export function __pairs(...args: unknown[]): unknown { return null!; } // TypeFunction  // YYY: not implemented
 
-  export function __tostring(...args: unknown[]): unknown { return null!; } // TypeString    // YYY: not implemented
+  export function __tostring(...args: unknown[]): unknown { return null!; } // TypeString // YYY: not implemented
 
 }
 

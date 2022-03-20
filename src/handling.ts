@@ -64,6 +64,28 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     return r;
   }
 
+  /* istanbul ignore next */
+  private ___debugHelper(node: ast.CallStatement) {
+    const expr = node.expression;
+    const base = expr.base;
+    if ('Identifier' === base.type && "___" === base.name) {
+      log.info(`___ found at ${Location.fromNodeStart(base)}`);
+      if ('CallExpression' === expr.type && expr.arguments.length) {
+        expr.arguments.forEach(it => log.info(this.handle(it)));
+      } else if ('StringCallExpression' === expr.type) {
+        if ('StringLiteral' === expr.argument.type) {
+          if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
+          if ('exit' === expr.argument.value) process.exit(0);
+          log.info('globals' === expr.argument.value
+            ? this.scope.getGlobals()
+            : 'locals' === expr.argument.value
+              ? this.scope.getLocals()
+              : expr.argument.value);
+        }
+      }
+    }
+  }
+
   // TODO: would like to make it possible to insert your own handlers,
   // this can be done using the 'handle' even for now
   // but it does not enable "preventDefault" kind of thing
@@ -143,25 +165,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     },
     AssignmentOperatorStatement: node => null!,
     CallStatement: node => {
-      const expr = node.expression;
-      const base = expr.base;
-      /* istanbul ignore next */
-      if ('Identifier' === base.type && "___" === base.name) {
-        log.info(`___ found at ${Location.fromNodeStart(base)}`);
-        if ('CallExpression' === expr.type && expr.arguments.length) {
-          expr.arguments.forEach(it => log.info(this.handle(it)));
-        } else if ('StringCallExpression' === expr.type) {
-          if ('StringLiteral' === expr.argument.type) {
-            if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
-            if ('exit' === expr.argument.value) process.exit(0);
-            log.info('globals' === expr.argument.value
-              ? this.scope.getGlobals()
-              : 'locals' === expr.argument.value
-                ? this.scope.getLocals()
-                : expr.argument.value);
-          }
-        }
-      }
+      this.___debugHelper(node);
 
       this.handle(node.expression);
 
@@ -186,6 +190,25 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
+      // the base needs to be partially processed before
+      // the function's scope itself, as the name of the function
+      // should be defined and typed appropriately
+      // (and this is where the circular refs really begin)
+      // ```
+      // function a() return a end
+      // ```
+      let mayTableInfo: VarInfo | undefined;
+      const base = node.identifier;
+      if (base) {
+        if ('Identifier' === base.type) {
+          this.scope.set(base.name, info); // XXX: locality gap
+        } else { // MemberExpression
+          mayTableInfo = this.handle(base.base);
+          // XXX: more of the '.' === it.indexer
+          MetaOps.__newindex(mayTableInfo, base.identifier.name, info);
+        }
+      }
+
       this.scope.fork(startLocation);
         // TODO: function type might benefit from having ref to its
         // inner scope (especially if trying typing some side-effects of calls)
@@ -200,21 +223,18 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.popContext(endLocation, 'Function');
       this.scope.join(endLocation, false);
 
-      const it = node.identifier;
-      if (it) {
-        if ('Identifier' === it.type) {
-          this.scope.set(it.name, info); // XXX: locality gap
-          this.scope.locate(Range.fromNode(it), it.name, info, LocateReason.Write);
+      if (base) {
+        if ('Identifier' === base.type) {
+          this.scope.locate(Range.fromNode(base), base.name, info, LocateReason.Write);
         } else { // MemberExpression
-          const mayTableInfo = this.handle(it.base);
-          this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, info, LocateReason.Write);
-
+          this.scope.locate(Range.fromNode(base.identifier), base.identifier.name, info, LocateReason.Write);
+          assert(mayTableInfo, "FunctionDeclaration: node.base should have been handled, resulting in a VarInfo");
           // XXX: more of the '.' === it.indexer
-          MetaOps.__newindex(mayTableInfo, it.identifier.name, info);
+          MetaOps.__newindex(mayTableInfo, base.identifier.name, info);
         }
       }
 
-      return it ? null! : info;
+      return base ? null! : info;
     },
     // -> type
     Identifier: node => {
@@ -234,7 +254,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const tableType = info.type.as(TypeTable)!;
       let autoIndex = 0;
 
-      node.fields.forEach((it, k) => {
+      node.fields.forEach(it=> {
         switch (it.type) {
           case 'TableKey': {
             // NOTE: need to change where says xyzType and its the `itself`
@@ -245,7 +265,9 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           } break;
 
           case 'TableKeyString': {
-            tableType.setField(it.key.name, this.handle(it.value));
+            const valueInfo = this.handle(it.value);
+            this.scope.locate(Range.fromNode(it.key), it.key.name, valueInfo, LocateReason.Write);
+            tableType.setField(it.key.name, valueInfo);
           } break;
 
           case 'TableValue': {
@@ -285,8 +307,22 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
       return MetaOps.__call(baseInfo, parameters);
     },
-    TableCallExpression: node => { throw "not implemented yet: handling 'TableCallExpression'" },
-    StringCallExpression: node => { throw "not implemented yet: handling 'StringCallExpression'" },
+    TableCallExpression: node => {
+      const base = node.base;
+      const baseInfo = this.handle(base);
+
+      const parameters = [this.handle(node.argument)];
+
+      return MetaOps.__call(baseInfo, parameters);
+    },
+    StringCallExpression: node => {
+      const base = node.base;
+      const baseInfo = this.handle(base);
+
+      const parameters = [this.handle(node.argument)];
+
+      return MetaOps.__call(baseInfo, parameters);
+    },
 
     // -> never
     IfClause: node => null!,

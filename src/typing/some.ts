@@ -21,7 +21,10 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
   private next?: TypeSomeOp;
 
   public constructor(...args: T) { this.args = args; }
-  public then(op: TypeSomeOp) { this.next = op; }
+  public then(op: TypeSomeOp) {
+    if (this.next) this.next.then(op);
+    else this.next = op;
+  }
 
   public toString() { return this.constructor.name + (this.next ? ` then ${this.next}` : ""); }
 
@@ -95,7 +98,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
           : Type.noType().itself.resolved();
       else
         r = to.itself instanceof TypeTable
-          ? to.itself.getIndexer(key.type)[1].type.itself.resolved()
+          ? to.itself.getIndexer(key.type.itself.resolved())[1].type.itself.resolved()
           : Type.noType().itself.resolved();
 
       return this.nextResolve(r);
@@ -126,10 +129,10 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
       if ('string' === typeof key || 'number' === typeof key) {
         if (to.itself instanceof TypeTable)
-          to.itself.setField(key.toString(), value);
+          to.itself.setField(key.toString(), { type: value.type.itself.resolved() });
       } else {
         if (to.itself instanceof TypeTable)
-          to.itself.setIndexer(key.type, value);
+          to.itself.setIndexer(key.type.itself.resolved(), { type: value.type.itself.resolved() });
       }
 
       return this.nextResolve(to);
@@ -141,7 +144,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
     public override represent(to: string) {
       const [parameters] = this.args;
-      return this.nextRepresent(`${to}(${parameters.join(", ")})`);
+      return this.nextRepresent(`${to}(${parameters.map(it => it.type).join(", ")})`);
     }
 
     public override resolve(to: Resolved) {
@@ -170,7 +173,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
  * using the `actsAs` method enables resolving to what it would be if
  * the type `acts` as was applied the operations `done` to `this`
  */
- export class TypeSome extends BaseType {
+export class TypeSome extends BaseType {
 
   private acts?: VarInfo;
   private done?: TypeSomeOp;
@@ -230,7 +233,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
   }
 
   public override resolved(): Resolved {
-    if (!this.acts) return Type.noType().itself.resolved();
+    if (!this.acts) return this.outself as Resolved; //Type.noType().itself.resolved(); // XXX: too early to call it noType: could be a returned function's parameter
     if (!this.done) return this === this.acts.type.itself
         ? BaseType.mark(this.outself)
         : this.acts.type.itself.resolved();
@@ -250,12 +253,12 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
     },
     __newindex(self, key, value) {
       const asSome = self.type.as(TypeSome)!;
-      return asSome.getApplied(new TypeSomeOp.__newindex(key, value));
+      asSome.setApplied(new TypeSomeOp.__newindex(key, value));
     },
     __call(self, parameters) {
       const asSome = self.type.as(TypeSome)!;
       return asSome.getApplied(new TypeSomeOp.__call(parameters));
-    }
+    },
   };
 
 }

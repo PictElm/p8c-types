@@ -20,23 +20,69 @@ function indentation() {
 }
 
 function main(args: string[]) {
-  try {
-    const source = "";
-    const state = { index: 0 };
-    const type = Parser.parseType(source, state);
-
-    const pojo = JSON.parse(JSON.stringify(type));
-    log.event(pojo);
-    log.event(source.slice(state.index));
-  } catch (err) {
-    if (err instanceof Parser.SyntaxError)
-      log.event(err.message);
-    else throw err;
-  }
-  return;
   // log.level = 'none';
 
-  const src = `
+  let src = `function a() return a end b = a()`; `
+--- @alias Color = 0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15
+
+--- @global print: (o: <o>, x: number|nil, y,: number|nil col: Color|nil) Prints a string of characters to the screen.
+--- @see https://pico-8.fandom.com/wiki/Print
+
+--- creates a new potato
+--- @param color: Color
+function Potato(self, color)
+  --- @todo set metatable (and much more)
+  self.__proto = Potato -- we can't do that yet, check back later
+
+  self.some = "thing"
+  self.color = color
+
+  return self
+end
+
+--- this is a potato
+p = Potato({}, 2) -- does not have the right type (simply "{}"...)
+
+-- this explodes with "TypeSome.revert: not acting as anything"
+--p = Potato()
+`; `
+function class(classname)
+  return function(proto)
+
+    proto.__classname = classname
+
+    local function ctor(...)
+      --- @todo set metatable (and much more)
+      local it = { __proto=proto, __ctor=ctor }
+      return proto.__init(it, ...)
+    end
+
+    return ctor
+
+  end
+end
+
+--- @alias Color = 0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15
+
+--- @global print: (o: <o>, x: number|nil, y,: number|nil col: Color|nil) Prints a string of characters to the screen.
+--- @see https://pico-8.fandom.com/wiki/Print
+
+--- creates a new potato
+--- @param color: Color
+Potato = class 'Potato' {
+
+  --- @param color: Color
+  __init=function(self, color)
+    self.some = "thing"
+    self.color = color
+    return self
+  end,
+
+}
+
+--- this is a potato
+p = Potato(2)
+`; `
 x, y, z = 0
 a = 0
 while z do
@@ -52,8 +98,8 @@ b = a, b
   const handling = new Handling(scoping, documenting);
 
   scoping
-    .on('fork', loc => log.event(`${"\t".repeat(scopeIndentation++)}{ new scope from: ${loc}`))
-    .on('join', loc => log.event(`${"\t".repeat(--scopeIndentation)}} end of a scope: ${loc}`))
+    //.on('fork', loc => log.event(`${"\t".repeat(scopeIndentation++)}{ new scope from: ${loc}`))
+    //.on('join', loc => log.event(`${"\t".repeat(--scopeIndentation)}} end of a scope: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
     .on('locate', onLocate)

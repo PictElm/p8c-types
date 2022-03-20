@@ -7,6 +7,14 @@ export class TypeFunction extends BaseType {
 
   protected returns: VarInfo = { type: Type.make(TypeTuple, []) };
 
+  /**
+   * when set do not compute (there is a circular reference somewhere)
+   * 
+   * @see TypeFunction#toString
+   * @see TypeFunction#resolved
+   */
+  private loopProtection: boolean = false;
+
   public constructor(outself: Type,
     protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
   ) { super(outself); }
@@ -44,21 +52,10 @@ export class TypeFunction extends BaseType {
       }
     });
 
-    const asTuple = this.returns.type.as(TypeTuple);
-    const r = asTuple
-      ? {
-          type: Type.make(TypeTuple, asTuple
-            .getInfos()
-            .map(info => ({
-              type: info.type.itself.resolved(),
-              doc: info.doc,
-            }))).itself.resolved(),
-          doc: this.returns.doc, // YYY?
-        }
-      : {
-          type: this.returns.type.itself.resolved(),
-          doc: this.returns.doc,
-        };
+    const r = {
+      type: this.returns.type.itself.resolved(),
+      doc: this.returns.doc,
+    };
 
     toRevert.forEach(type => type.revert());
 
@@ -66,32 +63,34 @@ export class TypeFunction extends BaseType {
   }
 
   public override toString() {
+    if (this.loopProtection) return "*" + this.outself.toString(); // YYY: _id
+    this.loopProtection = true;
+
     const parameters = this.parameters
       .names
       .map((name, k) => `${name}: ${this.parameters.infos[k].type.itself}`)
       .join(", ");
 
-    let returns: string = "";
-    const asTuple = this.returns.type.as(TypeTuple);
-    if (asTuple) {
-      const toRevert: TypeSome[] = [];
+    const toRevert: TypeSome[] = [];
 
-      this.parameters.infos.forEach(info => {
-        if (info.type.itself instanceof TypeSome) {
-          toRevert.push(info.type.itself);
-          info.type.itself.actsAs(info);
-        }
-      });
+    this.parameters.infos.forEach(info => {
+      if (info.type.itself instanceof TypeSome) {
+        toRevert.push(info.type.itself);
+        info.type.itself.actsAs(info);
+      }
+    });
 
-      returns = asTuple
-        .getInfos()
-        .map(info => `${info.type.itself}`)
-        .join(", ");
+    const returns = `${this.returns.type.itself}`;
+    // const asTuple = this.returns.type.as(TypeTuple);
+    // const returns = asTuple
+    //   ? `${asTuple}`
+    //   : `[${this.returns.type.itself}]`; // YYY: keep the "[]"?
 
-      toRevert.forEach(type => type.revert());
-    } else returns = `${this.returns.type.itself}`;
+    toRevert.forEach(type => type.revert());
 
-    return `(${parameters}) -> [${returns}]`;
+    const r = `(${parameters}) -> ${returns}`;
+    this.loopProtection = false;
+    return r;
   }
 
   public override toJSON(): unknown {
@@ -105,11 +104,14 @@ export class TypeFunction extends BaseType {
   }
 
   public override resolved(): Resolved {
+    if (this.loopProtection) return Type.noType().itself.resolved();
+    this.loopProtection = true;
+
     const r = Type.make(TypeFunction, this.parameters);
     const functionType = r.as(TypeFunction)!;
 
     const asTuple = this.returns.type.as(TypeTuple);
-    if (asTuple) {
+    if (asTuple) { // XXX/TODO/FIXME: all wrong, very likely
       const returns = asTuple.getInfos().map(ret => {
         const k = this.parameters.infos.findIndex(par => par === ret);
         if (-1 < k) return functionType.parameters.infos[k]; // ret itself _is_ a param of this
@@ -120,8 +122,12 @@ export class TypeFunction extends BaseType {
         //  it needs to be replaced with the corresponding r param
       });
       functionType.setReturns(returns);
-    } else functionType.setReturns([this.returns]); // XXX: stray refs? (should something? copy?)
+    } else functionType.setReturns([{
+        type: this.returns.type.itself.resolved(),
+        doc: this.returns.doc,
+      }]);
 
+    this.loopProtection = false;
     return BaseType.mark(r);
   }
 
