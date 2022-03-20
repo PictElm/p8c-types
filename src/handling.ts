@@ -209,6 +209,31 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
+      // TODO: try to "cheat" this.outself into the cached marked types
+      // so that if further down the tree one tries to resolve this very
+      // type, and its returns are not yet known, 
+      // 
+      // this is to face such:
+      // ```
+      // function z()
+      //   local function some(self)
+      //     return self
+      //   end
+      //   local function ctor(arg)
+      //     local it = { __ctor=ctor }
+      //     -- problem is here, it tries to resolve everything,
+      //     -- but the type of ctor (rather it.__ctor) resolves
+      //     -- to `(arg: <arg>) -> []` because incomplete
+      //     return some(it)
+      //     -- if the actual type of ctor was cached as the resolved
+      //     -- one for it, it would have the correct typing (but this
+      //     -- creates more potentially unwanted messy ref links)
+      //   end
+      //   return ctor
+      // end
+      // b = z()() -- b: { __ctor: (arg: <arg>) -> [] }
+      // ```
+
       this.scope.fork(startLocation);
         // TODO: function type might benefit from having ref to its
         // inner scope (especially if trying typing some side-effects of calls)

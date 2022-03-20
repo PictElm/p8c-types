@@ -29,7 +29,8 @@ export class TypeTuple extends BaseType {
   }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     info.type = Type.make(TypeTuple, []);
@@ -37,7 +38,7 @@ export class TypeTuple extends BaseType {
 
     asTuple.infos = this.infos.map(it => it.type.itself.resolved());
 
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }
@@ -53,7 +54,8 @@ export class TypeVararg extends TypeTuple {
   }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     info.type = Type.make(TypeVararg, []);
@@ -61,7 +63,7 @@ export class TypeVararg extends TypeTuple {
 
     asTuple.infos = this.infos.map(it => it.type.itself.resolved());
 
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }

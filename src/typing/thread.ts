@@ -38,12 +38,13 @@ export class TypeThread extends TypeFunction {
   }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     info.type = Type.make(TypeThread, this.signatures[0], ...this.signatures.slice(1)); // XXX: absolutely not
 
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }

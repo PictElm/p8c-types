@@ -145,7 +145,7 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
     public override represent(to: string) {
       const [parameters] = this.args;
-      return this.nextRepresent(`${to}(${parameters.map(it => it.type).join(", ")})`);
+      return this.nextRepresent(`${to}(${parameters.map(it => it.type.itself).join(", ")})`);
     }
 
     public override resolve(to: ResolvedInfo) {
@@ -203,11 +203,13 @@ export class TypeSome extends BaseType {
   }
 
   public actsAs(type: VarInfo) {
-    assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
+    // somehow works more or less for now... TypeSome.resolved makes for messy ref links though
+    //assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
     this.acts = type;
   }
   public revert() {
-    assert(this.acts, "TypeSome.revert: not acting as anything");
+    // somehow works more or less for now... TypeSome.resolved makes for messy ref links though
+    //assert(this.acts, "TypeSome.revert: not acting as anything");
     this.acts = undefined;
   }
 
@@ -234,7 +236,13 @@ export class TypeSome extends BaseType {
   }
 
   public override resolved(): ResolvedInfo {
-    const info = BaseType.marking({}, this.outself);
+    // it this is acting as another type, the whole needs to be considered
+    // as a unique type; as in the same TypeSome acting once as itself
+    // (eg resolving a function) and once as some TypeTable needs to occupy
+    // two **different** spots in the cache of marked types, because it does
+    // **not** resolved to the same ResolvedInfo
+    const cacheKey = this.outself.toString() + this.acts?.type.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     if (!this.acts) {
@@ -244,18 +252,30 @@ export class TypeSome extends BaseType {
     if (!this.done) {
       if (this === this.acts.type.itself) {
         info.type = this.outself;
-        return BaseType.mark(info, this.outself);
-      } else return this.acts.type.itself.resolved();
+        return BaseType.mark(info, cacheKey);
+      } else {
+        const it = this.acts.type.itself.resolved();
+        info.type = it.type;
+        info.doc = it.doc;
+        it.type.marked = false; // XXX: TypeSome acting as itself
+        return BaseType.mark(info, cacheKey);
+      }
     }
 
     const what = this.done;
     let to: ResolvedInfo;
     if (this === this.acts.type.itself) {
       info.type = this.outself;
-      to = BaseType.mark(info, this.outself);
-    } else to = this.acts.type.itself.resolved();
+      to = BaseType.mark(info, cacheKey); // probably can end the session too early
+    } else {
+      const it = this.acts.type.itself.resolved();
+      info.type = it.type;
+      info.doc = it.doc;
+      it.type.marked = false; // XXX: TypeSome acting as itself
+      to = BaseType.mark(info, cacheKey); // probably can end the session too early
+    }
 
-    return what.resolve(to);
+    return what.resolve(to); // should have nothing done after a .mark that can recurse into a .resolved
   }
 
   public override metaOps: Partial<MetaOpsType> = {

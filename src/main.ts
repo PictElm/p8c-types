@@ -22,39 +22,46 @@ function indentation() {
 function main(args: string[]) {
   // log.level = 'none';
 
-  const src = `function a(t) return t.y() end b = a{y=function()return 10 end}`; `
---- @alias Color = 0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15
-
---- @global print: (o: <o>, x: number|nil, y,: number|nil col: Color|nil) Prints a string of characters to the screen.
---- @see https://pico-8.fandom.com/wiki/Print
-
---- creates a new potato
---- @param color: Color
-function Potato(self, color)
-  --- @todo set metatable (and much more)
-  self.__proto = Potato -- we can't do that yet, check back later
-
-  self.some = "thing"
-  self.color = color
-
-  return self
+  const src = `
+function z()
+  local function some(self)
+    return self
+  end
+  local function ctor(arg)
+    local it = { __ctor=ctor }
+    ___(some(it))
+  end
+  return ctor
+end
+b = z()()
+`; `
+function z(proto)
+  local function ctor(arg)
+    local it = { __ctor=ctor }
+    return proto.__init(it, arg)
+  end
+  return ctor
 end
 
---- this is a potato
-p = Potato({}, 2) -- does not have the right type (simply "{}"...)
+Potato = z {
+  __init=function(self, color)
+    self.color = color
+    return self
+  end
+}
 
--- this explodes with "TypeSome.revert: not acting as anything"
---p = Potato()
+p = Potato(42)
+q = p.__ctor
 `; `
 function class(classname)
   return function(proto)
 
     proto.__classname = classname
 
-    local function ctor(...)
+    local function ctor(arg)
       --- @todo set metatable (and much more)
       local it = { __proto=proto, __ctor=ctor }
-      return proto.__init(it, ...)
+      return proto.__init--(it, arg)
     end
 
     return ctor
@@ -121,6 +128,7 @@ b = a, b
 main(process.argv.slice(2));
 
 function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) {
+  if (LocateReason.Write !== why) return;
   log.event([
     `${range.start}: {${LocateReason[why]}}`,
     `\t${name}: ${info.type.itself}`,
@@ -132,6 +140,4 @@ function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) 
       ?? "* nothing *"
     }`,
   ].join(`\n${indentation()}`));
-
-  if (LocateReason.Write === why) log.info(info);
 }

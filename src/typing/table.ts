@@ -4,7 +4,7 @@ import { BaseType, Type } from './internal';
 
 export class TypeTable extends BaseType {
 
-  private fields: Record<string, VarInfo> = {};
+  private fields: Record<string, VarInfo> = {}; // YYY: watch out for "__proto__" which is a valid Lua table key
   private indexers: Array<[Type, VarInfo]> = []; // YYY: indexing by VarInfo? (would carry eg. doc)
 
   /** set an entry of known (string) name */
@@ -66,7 +66,8 @@ export class TypeTable extends BaseType {
   }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     info.type = Type.make(TypeTable);
@@ -79,7 +80,7 @@ export class TypeTable extends BaseType {
       tableType.setIndexer(indexer, info.type.itself.resolved()) // YYY: indexer.resolved()?
     );
 
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
   // XXX/TODO: table metatable (yes, that exists)

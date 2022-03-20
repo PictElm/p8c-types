@@ -18,8 +18,11 @@ export abstract class BaseType {
 
   public constructor (protected readonly outself: Type) { }
 
+  /** returns the string representation of the type */
   public abstract toString(): string;
-  public abstract toJSON(key: string): unknown;
+  /** returns a POJO describing the type; it may be recursive (initially mainly meant for debug purposes) */
+  public abstract toJSON(key: string): unknown; // YYY: could type that, why not, that could be _fun_
+  /** returns a new type identical to this one */
   public abstract resolved(): ResolvedInfo;
 
   /**
@@ -31,16 +34,24 @@ export abstract class BaseType {
    */
   public metaOps: Partial<MetaOpsType> = {};
 
+  // YYY: having crap as static may bite later when doing multiple files (include)
+  // here eg.:
+  // ```
+  // bla = {
+  // fart=
+  // #include crap
+  // }
+  // ```
   private static alreadyMarked: Record<string, ResolvingInfo> | undefined;
   private static startedMarkingSession: string | undefined;
 
-  protected static mark(niwVarInfo: ResolvingInfo, forType: Type) {
+  protected static mark(niwVarInfo: ResolvingInfo, cacheUnder: string) {
     const r = niwVarInfo.type as Marked;
 
     assert(!r.marked, `BaseType.mark: type was already resolved: ${r}`);
 
     assert(BaseType.alreadyMarked, "BaseType.mark: not in a resolving session (missing a call to tryFindMarker at the beginning of a .resolved)");
-    if (forType.toString() === BaseType.startedMarkingSession) { // YYY: toString -> _id
+    if (cacheUnder === BaseType.startedMarkingSession) {
       assert(BaseType.alreadyMarked, `BaseType.mark: not in a resolving session (trying to close it with: "${BaseType.startedMarkingSession}")`);
       BaseType.alreadyMarked = undefined;
       BaseType.startedMarkingSession = undefined;
@@ -54,16 +65,15 @@ export abstract class BaseType {
     return niwVarInfo as ResolvedInfo;
   }
 
-  protected static marking(niwVarInfo: ResolvingInfo, forType: Type) {
-    const toString = forType.toString(); // YYY: toString -> _id
+  protected static marking(niwVarInfo: ResolvingInfo, cacheUnder: string) {
     if (!BaseType.alreadyMarked) {
       assert(!BaseType.startedMarkingSession, `BaseType.tryFindMarked: already in a resolving session (previous started: "${BaseType.startedMarkingSession}", new proposed started: "${toString}")`);
       BaseType.alreadyMarked = {};
-      BaseType.startedMarkingSession = toString;
+      BaseType.startedMarkingSession = cacheUnder;
     }
-    if (!BaseType.alreadyMarked[toString])
-      BaseType.alreadyMarked[toString] = niwVarInfo;
-    return BaseType.alreadyMarked[toString];
+    if (!BaseType.alreadyMarked[cacheUnder])
+      BaseType.alreadyMarked[cacheUnder] = niwVarInfo;
+    return BaseType.alreadyMarked[cacheUnder];
   }
 
 }
@@ -92,7 +102,12 @@ export class Type {
   /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
   public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
-  /* istanbul ignore next */
+  /**
+   * @todo YYY: is used (a lot) when resolving and caching types, but truth is it just
+   * needed a way to identify types (ideally as string or number);
+   * _id or equivalent should probably be exposed properly for this exact use case
+   * this would be the same with Scope and Metadata (why not a decorator?)
+   */
   public toString() { return `Type@_id${this._id}`; }
   public toJSON(key: string) { const name = this.itself.constructor.name; return { [name]: this.itself.toJSON(name) } };
 

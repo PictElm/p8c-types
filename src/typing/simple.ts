@@ -7,10 +7,11 @@ export class TypeNil extends BaseType {
   public override toJSON() { return null; }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeNil);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }
@@ -21,10 +22,11 @@ export class TypeBoolean extends BaseType {
   public override toJSON() { return null; }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeBoolean);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }
@@ -35,10 +37,11 @@ export class TypeNumber extends BaseType {
   public override toJSON() { return null; }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeNumber);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
   public override metaOps: Partial<MetaOpsType> = {
@@ -55,10 +58,11 @@ export class TypeString extends BaseType {
   public override toJSON() { return null; }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeString);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }
@@ -71,10 +75,11 @@ export class TypeLiteralBoolean extends TypeBoolean {
   public override toJSON(): any { return this.value; }
 
   public resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeLiteralBoolean, this.value);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }
@@ -87,10 +92,11 @@ export class TypeLiteralNumber extends TypeNumber {
   public override toJSON(): any { return this.value; }
 
   public resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeLiteralNumber, this.value);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
   public override metaOps: Partial<MetaOpsType> = {
@@ -114,10 +120,11 @@ export class TypeLiteralString extends TypeString {
   public override toJSON(): any { return this.value; }
 
   public resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
     info.type = Type.make(TypeLiteralString, this.value);
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
 }

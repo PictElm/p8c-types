@@ -95,27 +95,17 @@ export class TypeFunction extends BaseType {
   }
 
   public override resolved() {
-    const info = BaseType.marking({}, this.outself);
+    const cacheKey = this.outself.toString();
+    const info = BaseType.marking({}, cacheKey);
     if (info.type) return BaseType.marked(info);
 
     info.type = Type.make(TypeFunction, this.parameters);
     const functionType = info.type.as(TypeFunction)!;
 
-    const asTuple = this.returns.type.as(TypeTuple);
-    if (asTuple) { // XXX/TODO/FIXME: all wrong, very likely
-      const returns = asTuple.getInfos().map(ret => {
-        const k = this.parameters.infos.findIndex(par => par === ret);
-        if (-1 < k) return functionType.parameters.infos[k]; // ret itself _is_ a param of this
+    const asTupleInfos = this.returns.type.as(TypeTuple)?.getInfos();
+    functionType.setReturns(asTupleInfos ?? [this.returns.type.itself.resolved()]);
 
-        throw "hey"; // XXX/TODO/FIXME/...: find a way to trigger that
-        // summary:
-        //  if a this param somewhere in the type description of ret,
-        //  it needs to be replaced with the corresponding r param
-      });
-      functionType.setReturns(returns);
-    } else functionType.setReturns([this.returns.type.itself.resolved()]);
-
-    return BaseType.mark(info, this.outself);
+    return BaseType.mark(info, cacheKey);
   }
 
   public override metaOps: Partial<MetaOpsType> = {
