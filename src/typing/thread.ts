@@ -1,5 +1,5 @@
 import { TypeFunction } from './function';
-import { BaseType, Resolved, Type } from './internal';
+import { BaseType, Type } from './internal';
 
 export class TypeThread extends TypeFunction {
 
@@ -37,8 +37,13 @@ export class TypeThread extends TypeFunction {
     };
   }
 
-  public override resolved(): Resolved {
-    return BaseType.mark(Type.make(TypeThread, this.signatures[0], ...this.signatures.slice(1)));
+  public override resolved() {
+    const info = BaseType.marking({}, this.outself);
+    if (info.type) return BaseType.marked(info);
+
+    info.type = Type.make(TypeThread, this.signatures[0], ...this.signatures.slice(1)); // XXX: absolutely not
+
+    return BaseType.mark(info, this.outself);
   }
 
 }

@@ -44,14 +44,14 @@ describe("representing", () => {
     it("return - (1)", () => {
       const a = Type.make(TypeFunction, { names: [], infos: [], vararg: null }).as(TypeFunction)!;
       a.setReturns([{ type: Type.make(TypeBoolean) }]);
-      expectString(a).to.equal("() -> [boolean]");
+      expectString(a).to.equal("() -> boolean");
     });
 
     it("circular", () => {
       const params = { names: ["p"], infos: [{ type: Type.make(TypeSome, "p") }], vararg: null };
       const b = Type.make(TypeFunction, params).as(TypeFunction)!;
       b.setReturns(b.getParameters().infos);
-      expectString(b).to.equal("(p: <p>) -> [<p>]");
+      expectString(b).to.equal("(p: <p>) -> <p>");
     });
 
   });

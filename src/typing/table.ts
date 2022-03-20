@@ -1,11 +1,11 @@
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
-import { BaseType, Resolved, Type } from './internal';
+import { BaseType, Type } from './internal';
 
 export class TypeTable extends BaseType {
 
   private fields: Record<string, VarInfo> = {};
-  private indexers: Array<[Type, VarInfo]> = [];
+  private indexers: Array<[Type, VarInfo]> = []; // YYY: indexing by VarInfo? (would carry eg. doc)
 
   /** set an entry of known (string) name */
   public setField(field: string, info: VarInfo) {
@@ -14,7 +14,7 @@ export class TypeTable extends BaseType {
 
   /** get an entry of known (string) name */
   public getField(field: string): VarInfo {
-    return this.fields[field] ?? Type.noType();
+    return this.fields[field] ?? { type: Type.noType() };
   }
 
   // XXX: not sure the setIndex/getIndex methods make sense
@@ -32,7 +32,12 @@ export class TypeTable extends BaseType {
       ?? [indexer, { type: Type.noType() }];
   }
 
+  /** when set do not compute (there is a circular reference somewhere) */
+  private loopProtection: boolean = false;
   public override toString() {
+    if (this.loopProtection) return "*" + this.outself.toString(); // YYY: _id
+    this.loopProtection = true;
+
     const r: string[] = [];
 
     for (const key in this.fields)
@@ -42,6 +47,7 @@ export class TypeTable extends BaseType {
       r.push(`[${indexer}]: ${info.type.itself}`)
     );
 
+    this.loopProtection = false;
     return r.length ? `{ ${r.join(", ")} }` : "{}";
   }
 
@@ -59,24 +65,21 @@ export class TypeTable extends BaseType {
     };
   }
 
-  public override resolved(): Resolved {
-    const r = Type.make(TypeTable);
-    const tableType = r.as(TypeTable)!;
+  public override resolved() {
+    const info = BaseType.marking({}, this.outself);
+    if (info.type) return BaseType.marked(info);
+
+    info.type = Type.make(TypeTable);
+    const tableType = info.type.as(TypeTable)!;
 
     for (const key in this.fields)
-      tableType.setField(key, {
-        type: this.fields[key].type.itself.resolved(),
-        doc: this.fields[key].doc,
-      });
+      tableType.setField(key, this.fields[key].type.itself.resolved());
 
     this.indexers.forEach(([indexer, info]) =>
-      tableType.setIndexer(indexer, { // YYY: .resolved()?
-        type: info.type.itself.resolved(),
-        doc: info.doc,
-      })
+      tableType.setIndexer(indexer, info.type.itself.resolved()) // YYY: indexer.resolved()?
     );
 
-    return BaseType.mark(r);
+    return BaseType.mark(info, this.outself);
   }
 
   // XXX/TODO: table metatable (yes, that exists)

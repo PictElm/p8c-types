@@ -22,7 +22,7 @@ function indentation() {
 function main(args: string[]) {
   // log.level = 'none';
 
-  let src = `function a() return a end b = a()`; `
+  const src = `function a(t) return t.y() end b = a{y=function()return 10 end}`; `
 --- @alias Color = 0|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15
 
 --- @global print: (o: <o>, x: number|nil, y,: number|nil col: Color|nil) Prints a string of characters to the screen.
@@ -132,4 +132,6 @@ function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) 
       ?? "* nothing *"
     }`,
   ].join(`\n${indentation()}`));
+
+  if (LocateReason.Write === why) log.info(info);
 }

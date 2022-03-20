@@ -1,19 +1,11 @@
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
-import { BaseType, Resolved, Type, TypeSome } from './internal';
+import { BaseType, Type, TypeSome } from './internal';
 import { TypeTuple } from './tuple';
 
 export class TypeFunction extends BaseType {
 
   protected returns: VarInfo = { type: Type.make(TypeTuple, []) };
-
-  /**
-   * when set do not compute (there is a circular reference somewhere)
-   * 
-   * @see TypeFunction#toString
-   * @see TypeFunction#resolved
-   */
-  private loopProtection: boolean = false;
 
   public constructor(outself: Type,
     protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
@@ -52,16 +44,15 @@ export class TypeFunction extends BaseType {
       }
     });
 
-    const r = {
-      type: this.returns.type.itself.resolved(),
-      doc: this.returns.doc,
-    };
+    const r = this.returns.type.itself.resolved();
 
     toRevert.forEach(type => type.revert());
 
     return r;
   }
 
+  /** when set do not compute (there is a circular reference somewhere) */
+  private loopProtection: boolean = false;
   public override toString() {
     if (this.loopProtection) return "*" + this.outself.toString(); // YYY: _id
     this.loopProtection = true;
@@ -103,12 +94,12 @@ export class TypeFunction extends BaseType {
     };
   }
 
-  public override resolved(): Resolved {
-    if (this.loopProtection) return Type.noType().itself.resolved();
-    this.loopProtection = true;
+  public override resolved() {
+    const info = BaseType.marking({}, this.outself);
+    if (info.type) return BaseType.marked(info);
 
-    const r = Type.make(TypeFunction, this.parameters);
-    const functionType = r.as(TypeFunction)!;
+    info.type = Type.make(TypeFunction, this.parameters);
+    const functionType = info.type.as(TypeFunction)!;
 
     const asTuple = this.returns.type.as(TypeTuple);
     if (asTuple) { // XXX/TODO/FIXME: all wrong, very likely
@@ -122,13 +113,9 @@ export class TypeFunction extends BaseType {
         //  it needs to be replaced with the corresponding r param
       });
       functionType.setReturns(returns);
-    } else functionType.setReturns([{
-        type: this.returns.type.itself.resolved(),
-        doc: this.returns.doc,
-      }]);
+    } else functionType.setReturns([this.returns.type.itself.resolved()]);
 
-    this.loopProtection = false;
-    return BaseType.mark(r);
+    return BaseType.mark(info, this.outself);
   }
 
   public override metaOps: Partial<MetaOpsType> = {

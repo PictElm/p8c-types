@@ -1,8 +1,9 @@
 import assert from 'assert';
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
+import { ResolvedInfo } from './base';
 import { TypeFunction } from './function';
-import { BaseType, Resolved, Type } from './internal';
+import { BaseType, Type } from './internal';
 import { TypeTable } from './table';
 
 /**
@@ -28,11 +29,11 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
   public toString() { return this.constructor.name + (this.next ? ` then ${this.next}` : ""); }
 
-  public represent(to: string): string { assert(false, `TypeSomeOp.represent: operation "${this}" applied to "${to}"`); }
-  public resolve(to: Resolved): Resolved { assert(false, `TypeSomeOp.resolve: operation "${this}" applied to "${to}"`); }
+  public represent(to: string): string { assert(false, `TypeSomeOp.represent: operation "${this}" applied to "${to}" not implemented yet`); }
+  public resolve(to: ResolvedInfo): ResolvedInfo { assert(false, `TypeSomeOp.resolve: operation "${this}" applied to "${to}" not implemented yet`); }
 
   protected nextRepresent(to: string) { return this.next?.represent(to) ?? to; }
-  protected nextResolve(to: Resolved) { return this.next?.resolve(to) ?? to; }
+  protected nextResolve(to: ResolvedInfo) { return this.next?.resolve(to) ?? to; }
 
   public static __add = class __add extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
@@ -88,17 +89,17 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
       );
     }
 
-    public override resolve(to: Resolved) {
+    public override resolve(to: ResolvedInfo) {
       const [key] = this.args;
-      let r: Resolved;
+      let r: ResolvedInfo;
 
       if ('string' === typeof key || 'number' === typeof key)
-        r = to.itself instanceof TypeTable
-          ? to.itself.getField(key.toString()).type.itself.resolved()
+        r = to.type.itself instanceof TypeTable
+          ? to.type.itself.getField(key.toString()).type.itself.resolved()
           : Type.noType().itself.resolved();
       else
-        r = to.itself instanceof TypeTable
-          ? to.itself.getIndexer(key.type.itself.resolved())[1].type.itself.resolved()
+        r = to.type.itself instanceof TypeTable
+          ? to.type.itself.getIndexer(key.type.itself.resolved().type)[1].type.itself.resolved()
           : Type.noType().itself.resolved();
 
       return this.nextResolve(r);
@@ -124,15 +125,15 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
       );
     }
 
-    public override resolve(to: Resolved) {
+    public override resolve(to: ResolvedInfo) {
       const [key, value] = this.args;
 
       if ('string' === typeof key || 'number' === typeof key) {
-        if (to.itself instanceof TypeTable)
-          to.itself.setField(key.toString(), { type: value.type.itself.resolved() });
+        if (to.type.itself instanceof TypeTable)
+          to.type.itself.setField(key.toString(), value.type.itself.resolved());
       } else {
-        if (to.itself instanceof TypeTable)
-          to.itself.setIndexer(key.type.itself.resolved(), { type: value.type.itself.resolved() });
+        if (to.type.itself instanceof TypeTable)
+          to.type.itself.setIndexer(key.type.itself.resolved().type/*resolved??*/, value.type.itself.resolved());
       }
 
       return this.nextResolve(to);
@@ -147,11 +148,11 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
       return this.nextRepresent(`${to}(${parameters.map(it => it.type).join(", ")})`);
     }
 
-    public override resolve(to: Resolved) {
+    public override resolve(to: ResolvedInfo) {
       const [parameters] = this.args;
       return this.nextResolve(
-        to.itself instanceof TypeFunction
-          ? to.itself.getReturns(parameters).type.itself.resolved()
+        to.type.itself instanceof TypeFunction
+          ? to.type.itself.getReturns(parameters).type.itself.resolved() // YYY: is already resolved (tho doesn't hurt..)
           : Type.noType().itself.resolved()
       );
     }
@@ -232,16 +233,27 @@ export class TypeSome extends BaseType {
     };
   }
 
-  public override resolved(): Resolved {
-    if (!this.acts) return this.outself as Resolved; //Type.noType().itself.resolved(); // XXX: too early to call it noType: could be a returned function's parameter
-    if (!this.done) return this === this.acts.type.itself
-        ? BaseType.mark(this.outself)
-        : this.acts.type.itself.resolved();
+  public override resolved(): ResolvedInfo {
+    const info = BaseType.marking({}, this.outself);
+    if (info.type) return BaseType.marked(info);
+
+    if (!this.acts) {
+      info.type = this.outself;
+      return BaseType.marked(info);
+    }
+    if (!this.done) {
+      if (this === this.acts.type.itself) {
+        info.type = this.outself;
+        return BaseType.mark(info, this.outself);
+      } else return this.acts.type.itself.resolved();
+    }
 
     const what = this.done;
-    const to = this === this.acts.type.itself
-      ? BaseType.mark(this.outself)
-      : this.acts.type.itself.resolved();
+    let to: ResolvedInfo;
+    if (this === this.acts.type.itself) {
+      info.type = this.outself;
+      to = BaseType.mark(info, this.outself);
+    } else to = this.acts.type.itself.resolved();
 
     return what.resolve(to);
   }
