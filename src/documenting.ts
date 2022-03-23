@@ -247,7 +247,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
             const type = bidoof.nextType();
             if (!type) throw "not implemented: signal missing <type>";
 
-            this.alias[alias] = Type.make(TypeAlias, alias, entry, type).as(TypeAlias);
+            this.alias[alias] = Type.make(TypeAlias, alias, entry, type);
             this.emit('alias', tagRange, alias, type);
           } break;
 
@@ -291,7 +291,7 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
               ).parameters;
             p.names.push(name);
             p.infos.push({
-              type: type ?? Type.make(TypeSome, name),
+              type: type ?? Type.make(TypeSome, null!, name),
               doc: entry, // bidoof.rest()
             });
             this.emit('param', tagRange, name, type, bidoof.rest());
@@ -362,21 +362,20 @@ export class Documenting extends TypedEmitter<DocumentingEvents> {
     if (!entry.type) {
       if (buildingFunction) {
         const type = Type.make(TypeFunction, buildingFunction.parameters);
-        type.as(TypeFunction)!.setReturns(buildingFunction.returns);
+        type.setReturns(buildingFunction.returns);
         entry.types.push(type);
       }
 
       if (buildingTable) {
         const type = Type.make(TypeTable);
-        const asTable = type.as(TypeTable)!;
         Object
           .entries(buildingTable.fields)
           .forEach(([field, info]) =>
-            asTable.setField(field, info)
+            type.setField(field, info)
           );
         buildingTable.indexers
           .forEach(([indexer, info]) =>
-            asTable.setIndexer(indexer, info)
+            type.setIndexer(indexer, info)
           );
         entry.types.push(type);
       }

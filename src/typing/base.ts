@@ -4,26 +4,28 @@ import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
 import { TypeNil } from './internal';
 
-/**
- * when a type is resolved, it is marked
- * 
- * (idea was preventing a same entity to be resolved multiple times)
- */
-export type Marked = Type & { marked: boolean };
-export type ResolvedInfo = Omit<VarInfo, 'type'> & { type: Marked };
-export type ResolvingInfo = Omit<VarInfo, 'type'> & { type?: Type };
+export function toPOJO(type: BaseType): unknown {
+  const r = type.toJSON("");
+  for (const k in r)
+    if ('function' === typeof r[k].toJSON)
+      r[k] = r[k].toJSON(k);
+  return r;
+}
 
 /** this is the underlying abstract class for a type `itself` */
 export abstract class BaseType {
 
-  public constructor (protected readonly outself: Type) { }
+  private static _lastId = 0;
+  protected readonly _id = ++BaseType._lastId;
+
+  public constructor () { }
 
   /** returns the string representation of the type */
   public abstract toString(): string;
   /** returns a POJO describing the type; it may be recursive (initially mainly meant for debug purposes) */
-  public abstract toJSON(key: string): unknown; // YYY: could type that, why not, that could be _fun_
+  public abstract toJSON(key?: string): any; // YYY: could type that, why not, that could be _fun_
   /** returns a new type identical to this one */
-  public abstract resolved(): ResolvedInfo;
+  public /* abstract default */ resolved(): VarInfo { return { type: this }; }
 
   /**
    * entries of this object are to be called from the MetaOps namespace only!
@@ -34,118 +36,99 @@ export abstract class BaseType {
    */
   public metaOps: Partial<MetaOpsType> = {};
 
-  // YYY: having crap as static may bite later when doing multiple files (include)
-  // here eg.:
-  // ```
-  // bla = {
-  // fart=
-  // #include crap
-  // }
-  // ```
-  private static alreadyMarked: Record<string, ResolvingInfo> | undefined;
-  private static startedMarkingSession: string | undefined;
+}
 
-  protected static mark(niwVarInfo: ResolvingInfo, cacheUnder: string) {
-    const r = niwVarInfo.type as Marked;
+export type Type = BaseType;
 
-    assert(!r.marked, `BaseType.mark: type was already resolved: ${r}`);
+// type OmitFirst<A extends unknown[]> = A extends [unknown, ...infer T] ? T : never;
 
-    assert(BaseType.alreadyMarked, "BaseType.mark: not in a resolving session (missing a call to tryFindMarker at the beginning of a .resolved)");
-    if (cacheUnder === BaseType.startedMarkingSession) {
-      assert(BaseType.alreadyMarked, `BaseType.mark: not in a resolving session (trying to close it with: "${BaseType.startedMarkingSession}")`);
-      BaseType.alreadyMarked = undefined;
-      BaseType.startedMarkingSession = undefined;
-    }
+export namespace Type {
 
-    r.marked = true;
-    return niwVarInfo as ResolvedInfo;
+  // XXX: tsc should warn when it encouters on of these... anyhow, this was to
+  // temporarily circumvent the "Type instantiation is excessively deep and possibly infinite."
+  // dont know when to remove, so here's a XXX; please see me o/
+  // @ts-ignore
+  // export function make<Z extends new (...args: [...ConstructorParameters<Z>]) => BaseType>(ctor: Z, ...args: ConstructorParameters<Z>): InstanceType<Z> {
+  export function make<Z extends new (...args: any[]) => BaseType>(ctor: Z, ...args: any[]): InstanceType<Z> {
+    // const r = new Type();
+    // r.mutate(new ctor(r, ...args));
+    // return r;
+    return new ctor(...args) as InstanceType<Z>;
   }
 
-  protected static marked(niwVarInfo: ResolvingInfo) {
-    return niwVarInfo as ResolvedInfo;
-  }
-
-  protected static marking(niwVarInfo: ResolvingInfo, cacheUnder: string) {
-    if (!BaseType.alreadyMarked) {
-      assert(!BaseType.startedMarkingSession, `BaseType.tryFindMarked: already in a resolving session (previous started: "${BaseType.startedMarkingSession}", new proposed started: "${toString}")`);
-      BaseType.alreadyMarked = {};
-      BaseType.startedMarkingSession = cacheUnder;
-    }
-    if (!BaseType.alreadyMarked[cacheUnder])
-      BaseType.alreadyMarked[cacheUnder] = niwVarInfo;
-    return BaseType.alreadyMarked[cacheUnder];
-  }
+  export function noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
 
 }
 
-type OmitFirst<A extends unknown[]> = A extends [unknown, ...infer T] ? T : never;
+// /**
+//  * this is the class to use to create a typing information
+//  * 
+//  * it also acts as a wrapper around this typing information (which is
+//  * accessible with `itself` and `as`) this is to add a layer of indirection
+//  * (allows mutating a type in-place and keep every references valide)
+//  */
+// export class Type {
 
-/**
- * this is the class to use to create a typing information
- * 
- * it also acts as a wrapper around this typing information (which is
- * accessible with `itself` and `as`) this is to add a layer of indirection
- * (allows mutating a type in-place and keep every references valide)
- */
-export class Type {
+//   private static _lastId = 0;
+//   protected readonly _id = ++Type._lastId;
 
-  private static _lastId = 0;
-  protected readonly _id = ++Type._lastId;
+//   // private _itself: BaseType = null!; // is set with mutate right away (see Type.make)
+//   // public get itself() { return this._itself; }
 
-  private _itself: BaseType = null!; // is set with mutate right away (see Type.make)
-  public get itself() { return this._itself; }
+//   private constructor() { }
 
-  private constructor() { }
+//   // /** checks if the type itself is instance of given parameter, if not returns `undefined` */
+//   // public as<Z extends new (...args: any[]) => BaseType>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
+//   // /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
+//   // public mutate<T extends BaseType>(into: T) { return this._itself = into; }
 
-  /** checks if the type itself is instance of given parameter, if not returns `undefined` */
-  public as<Z extends new (...args: any[]) => BaseType>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
-  /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
-  public mutate<T extends BaseType>(into: T) { return this._itself = into; }
+//   /**
+//    * @todo YYY: is used (a lot) when resolving and caching types, but truth is it just
+//    * needed a way to identify types (ideally as string or number);
+//    * _id or equivalent should probably be exposed properly for this exact use case
+//    * this would be the same with Scope and Metadata (why not a decorator?)
+//    */
+//   public toString() { return `Type@_id${this._id}`; }
+//   // public toJSON(key: string) { const name = this.constructor.name; return { [name]: this.toJSON(name) } };
+//   // public toJSON(key: string) { const name = this.constructor.name; return { [name]: this.toJSON(name) } };
 
-  /**
-   * @todo YYY: is used (a lot) when resolving and caching types, but truth is it just
-   * needed a way to identify types (ideally as string or number);
-   * _id or equivalent should probably be exposed properly for this exact use case
-   * this would be the same with Scope and Metadata (why not a decorator?)
-   */
-  public toString() { return `Type@_id${this._id}`; }
-  public toJSON(key: string) { const name = this.itself.constructor.name; return { [name]: this.itself.toJSON(name) } };
+//   public static make<Z extends new (...args: [...ConstructorParameters<Z>]) => BaseType>(ctor: Z, ...args: ConstructorParameters<Z>) {
+//     // const r = new Type();
+//     // r.mutate(new ctor(r, ...args));
+//     // return r;
+//     return new ctor(...args);
+//   }
 
-  public static make<Z extends new (...args: [Type, ...OmitFirst<ConstructorParameters<Z>>]) => BaseType>(ctor: Z, ...args: OmitFirst<ConstructorParameters<Z>>) {
-    const r = new Type();
-    r.mutate(new ctor(r, ...args));
-    return r;
-  }
+//   public static noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
 
-  public static noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
-
-}
+// }
 
 //#region union & intersection
 
 // TODO: properly
 export class TypeUnion extends BaseType {
 
-  public constructor(outself: Type,
+  public constructor(
     private left: Type,
     private right: Type,
-  ) { super(outself); }
+  ) { super(); }
 
   public override toString() {
-    return `${this.left.itself} | ${this.right.itself}`;
+    return `${this.left} | ${this.right}`;
   }
 
   public override toJSON() {
     return {
-      left: this.left,
-      right: this.right,
+      type: this.constructor.name,
+      left: this.left.toJSON('left'),
+      right: this.right.toJSON('right'),
     };
   }
 
   public override resolved() {
-    return this.left.itself.constructor === this.right.itself.constructor
-      ? this.left.itself.resolved()
-      : Type.noType().itself.resolved(); // XXX: absolutely not
+    return this.left.constructor === this.right.constructor
+      ? this.left.resolved()
+      : Type.noType().resolved(); // XXX: absolutely not
   }
 
 }
@@ -153,26 +136,27 @@ export class TypeUnion extends BaseType {
 // TODO: properly
 export class TypeIntersection extends BaseType {
 
-  public constructor(outself: Type,
+  public constructor(
     private left: Type,
     private right: Type,
-  ) { super(outself); }
+  ) { super(); }
 
   public override toString() {
-    return `${this.left.itself} & ${this.right.itself}`;
+    return `${this.left} & ${this.right}`;
   }
 
   public override toJSON() {
     return {
-      left: this.left,
-      right: this.right,
+      type: this.constructor.name,
+      left: this.left.toJSON('left'),
+      right: this.right.toJSON('right'),
     };
   }
 
   public override resolved() {
-    return this.left.itself.constructor === this.right.itself.constructor
-      ? this.left.itself.resolved()
-      : Type.noType().itself.resolved(); // XXX: absolutely not
+    return this.left.constructor === this.right.constructor
+      ? this.left.resolved()
+      : Type.noType().resolved(); // XXX: absolutely not
   }
 
 }
@@ -181,11 +165,11 @@ export class TypeIntersection extends BaseType {
 
 export class TypeAlias extends BaseType {
 
-  public constructor(outself: Type,
+  public constructor(
     public readonly alias: string,
     public readonly doc?: Metadata,
     public forType?: Type
-  ) { super(outself); }
+  ) { super(); }
 
   public override toString() {
     return this.alias;
@@ -193,12 +177,13 @@ export class TypeAlias extends BaseType {
 
   public override toJSON() {
     return {
+      type: this.constructor.name,
       alias: this.alias,
     };
   }
 
   public override resolved() {
-    return Type.noType().itself.resolved(); // XXX: absolutely not
+    return Type.noType().resolved(); // XXX: absolutely not
   }
 
 }

@@ -3,7 +3,7 @@ import { TypedEmitter } from 'tiny-typed-emitter';
 import { Metadata } from './documenting';
 import { Location, Range } from './locating';
 //import { log } from './logging';
-import { Type, TypeUnion } from './typing';
+import { Type, TypeFunction, TypeSome, TypeTable, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
 export type VarInfo = { type: Type, doc?: Metadata }; // (move to ./typing/base.ts?)
@@ -13,7 +13,7 @@ export type VarInfo = { type: Type, doc?: Metadata }; // (move to ./typing/base.
  * have variables of enclosing scopes visible and updatable from
  * children scopes
  */
-class Scope {
+export class Scope {
 
   private static _lastId = 0;
   protected readonly _id = ++Scope._lastId;
@@ -23,6 +23,8 @@ class Scope {
 
   private constructor(public parent?: Scope) {
     this.variables = Object.create(parent?.variables ?? null);
+    for (const name in this.variables)
+      this.variables[name] = { type: Type.make(TypeSome, this, name) };
   }
 
   /**
@@ -116,14 +118,14 @@ namespace Context {
    * return type (same will be for eg. `yield` calls)
    */
   export class Function extends Base<'Function'> {
-    public constructor(public readonly theFunction: Type) { super('Function'); }
+    public constructor(public readonly theFunction: TypeFunction) { super('Function'); }
   }
 
   /**
    * will probably be needed for the `self`? maybe not actually...
    */
   export class Table extends Base<'Table'> {
-    public constructor(public readonly theTable: Type) { super('Table'); }
+    public constructor(public readonly theTable: TypeTable) { super('Table'); }
   }
 
   export class Do extends Base<'Do'> {
@@ -169,6 +171,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   private local = this.global;
 
   private readonly scopes = [this.global];
+  public get current() { return this.local; }
 
   private readonly contexts: { [T in ContextKind]?: ContextType<T>[] } = {};
 

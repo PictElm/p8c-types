@@ -37,8 +37,8 @@ export namespace MetaOps {
    * ```
    */
   export function __add(left: VarInfo, right: VarInfo): VarInfo {
-    const o1 = left.type.itself;
-    const o2 = right.type.itself;
+    const o1 = left.type;
+    const o2 = right.type;
 
     if (o1 instanceof TypeNumber && o2 instanceof TypeNumber)
       return o1.metaOps.__add!(left, right);
@@ -96,16 +96,16 @@ export namespace MetaOps {
    * ```
    */
   export function __index(self: VarInfo, key: string | number | VarInfo): VarInfo {
-    return self.type.itself.metaOps.__index?.(self, key)
+    return self.type.metaOps.__index?.(self, key)
       ?? { type: Type.noType() };
   }
 
   export function __newindex(self: VarInfo, key: string | number | VarInfo, value: VarInfo): void {
-    self.type.itself.metaOps.__newindex?.(self, key, value);
+    self.type.metaOps.__newindex?.(self, key, value);
   }
 
   export function __call(self: VarInfo, parameters: VarInfo[]): VarInfo {
-    return self.type.itself.metaOps.__call?.(self, parameters)
+    return self.type.metaOps.__call?.(self, parameters)
       ?? { type: Type.noType() };
   }
 

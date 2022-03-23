@@ -1,7 +1,7 @@
 import assert from 'assert';
+import { log } from '../logging';
 import { MetaOpsType } from '../operating';
-import { VarInfo } from '../scoping';
-import { ResolvedInfo } from './base';
+import { Scope, VarInfo } from '../scoping';
 import { TypeFunction } from './function';
 import { BaseType, Type } from './internal';
 import { TypeTable } from './table';
@@ -18,7 +18,7 @@ import { TypeTable } from './table';
  */
 abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
-  protected args: T;
+  public args: T;
   private next?: TypeSomeOp;
 
   public constructor(...args: T) { this.args = args; }
@@ -28,12 +28,25 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
   }
 
   public toString() { return this.constructor.name + (this.next ? ` then ${this.next}` : ""); }
+  public toJSON(key: string) {
+    return {
+      [this.constructor.name]: this.args.map((it: any) => 'function' === typeof it.toJSON
+        ? it.toJSON(this.constructor.name)
+        : 'function' === typeof it.type?.toJSON
+          ? it.type.toJSON(this.constructor.name)
+          : 'object' != typeof it
+            ? it
+            : null),
+    }
+  };
 
   public represent(to: string): string { assert(false, `TypeSomeOp.represent: operation "${this}" applied to "${to}" not implemented yet`); }
-  public resolve(to: ResolvedInfo): ResolvedInfo { assert(false, `TypeSomeOp.resolve: operation "${this}" applied to "${to}" not implemented yet`); }
+  /** chains, but no 'new' or 'resolved' */
+  public apply(to: VarInfo): VarInfo { assert(false, `TypeSomeOp.resolve: operation "${this}" applied to "${to}" not implemented yet`); }
 
   protected nextRepresent(to: string) { return this.next?.represent(to) ?? to; }
-  protected nextResolve(to: ResolvedInfo) { return this.next?.resolve(to) ?? to; }
+  protected nextResolve(to: VarInfo) { return this.next?.apply(to) ?? to; }
+
 
   public static __add = class __add extends TypeSomeOp<[left: VarInfo, right: VarInfo]> {
   }
@@ -81,26 +94,26 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
           ? `${to}.${key}` // XXX: again, assumes '.'
           : 'number' === typeof key
             ? `${to}[${key}]`
-            : `${to}[${key.type.itself instanceof TypeFunction
+            : `${to}[${key.type instanceof TypeFunction
                 ? "function"
-                : key.type.itself instanceof TypeTable
+                : key.type instanceof TypeTable
                   ? "table"
-                  : key.type.itself}]`
+                  : key.type}]`
       );
     }
 
-    public override resolve(to: ResolvedInfo) {
+    public override apply(to: VarInfo) {
       const [key] = this.args;
-      let r: ResolvedInfo;
+      let r: VarInfo;
 
       if ('string' === typeof key || 'number' === typeof key)
-        r = to.type.itself instanceof TypeTable
-          ? to.type.itself.getField(key.toString()).type.itself.resolved()
-          : Type.noType().itself.resolved();
+        r = to.type instanceof TypeTable
+          ? to.type.getField(key.toString())
+          : { type: Type.noType() };
       else
-        r = to.type.itself instanceof TypeTable
-          ? to.type.itself.getIndexer(key.type.itself.resolved().type)[1].type.itself.resolved()
-          : Type.noType().itself.resolved();
+        r = to.type instanceof TypeTable
+          ? to.type.getIndexer(key.type)[1]
+          : { type: Type.noType() };
 
       return this.nextResolve(r);
     }
@@ -114,26 +127,26 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
       return this.nextRepresent(
         'string' === typeof key
-          ? `${to}(.${key}: ${value.type.itself})` // XXX: again, assumes '.'
+          ? `${to}(.${key}: ${value.type})` // XXX: again, assumes '.'
           : 'number' === typeof key
-            ? `${to}([${key}]: ${value.type.itself})`
-            : `${to}([${key.type.itself instanceof TypeFunction
+            ? `${to}([${key}]: ${value.type})`
+            : `${to}([${key.type instanceof TypeFunction
                 ? "function"
-                : key.type.itself instanceof TypeTable
+                : key.type instanceof TypeTable
                   ? "table"
-                  : key.type.itself}]: ${value.type.itself})`
+                  : key.type}]: ${value.type})`
       );
     }
 
-    public override resolve(to: ResolvedInfo) {
+    public override apply(to: VarInfo) {
       const [key, value] = this.args;
 
       if ('string' === typeof key || 'number' === typeof key) {
-        if (to.type.itself instanceof TypeTable)
-          to.type.itself.setField(key.toString(), value.type.itself.resolved());
+        if (to.type instanceof TypeTable)
+          to.type.setField(key.toString(), value);
       } else {
-        if (to.type.itself instanceof TypeTable)
-          to.type.itself.setIndexer(key.type.itself.resolved().type/*resolved??*/, value.type.itself.resolved());
+        if (to.type instanceof TypeTable)
+          to.type.setIndexer(key.type, value);
       }
 
       return this.nextResolve(to);
@@ -145,15 +158,15 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
     public override represent(to: string) {
       const [parameters] = this.args;
-      return this.nextRepresent(`${to}(${parameters.map(it => it.type.itself).join(", ")})`);
+      return this.nextRepresent(`${to}(${parameters.map(it => it.type).join(", ")})`);
     }
 
-    public override resolve(to: ResolvedInfo) {
+    public override apply(to: VarInfo) {
       const [parameters] = this.args;
       return this.nextResolve(
-        to.type.itself instanceof TypeFunction
-          ? to.type.itself.getReturns(parameters).type.itself.resolved() // YYY: is already resolved (tho doesn't hurt..)
-          : Type.noType().itself.resolved()
+        to.type instanceof TypeFunction
+          ? to.type.getReturns(parameters)
+          : { type: Type.noType() }
       );
     }
 
@@ -176,12 +189,13 @@ abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
  */
 export class TypeSome extends BaseType {
 
-  private acts?: VarInfo;
+  public acts?: VarInfo;
   private done?: TypeSomeOp;
 
-  public constructor(outself: Type,
-    private from?: string
-  ) { super(outself); }
+  public constructor(
+    private scope: Scope,
+    private from: string,
+  ) { super(); }
 
   /** in-place applied (the type is modified) */
   public setApplied(operation: TypeSomeOp) {
@@ -192,12 +206,11 @@ export class TypeSome extends BaseType {
   /** not in-place applied (a new type is created) */
   public getApplied(operation: TypeSomeOp) {
     //const repr = this.from && operation.represent(this.from);
-    const r = { type: Type.make(TypeSome) };
-    const someType = r.type.as(TypeSome)!;
+    const r = { type: Type.make(TypeSome, this.scope, this.from) };
 
     // "acts as `this` with `operation` `done` on it"
-    someType.acts = { type: this.outself }; // XXX: doc gap
-    someType.done = operation;
+    r.type.acts = { type: this };
+    r.type.done = operation;
 
     return r;
   }
@@ -214,82 +227,97 @@ export class TypeSome extends BaseType {
   }
 
   public override toString(): string {
-    if (!this.acts) return `<${this.from ?? "?"}>`;
-    if (!this.done) return this === this.acts.type.itself
+    /*if (!this.acts) return `<${this.from ?? "?"}>`;
+    if (!this.done) return this === this.acts.type
         ? `<${this.from ?? "?"}>`
-        : `${this.acts.type.itself}`;
+        : `${this.acts.type}`;
 
     const what = this.done;
-    const to = this === this.acts.type.itself
+    const to = this === this.acts.type
       ? `<${this.from ?? "?"}>`
-      : `${this.acts.type.itself}`;
+      : `${this.acts.type}`;*/
 
-    return what.represent(to);
+    const to = `<${this.from ?? "?"}>`;
+    return this.done?.represent(to) ?? to;
   }
 
   public override toJSON() {
     return {
+      type: this.constructor.name,
       acts: this.acts?.type.toJSON('acts'),
-      from: this.from ?? null,
-      done: this.done?.constructor.name ?? null,
+      from: this.from
+        ? `${this.scope}::${this.from}`
+        : null,
+      done: this.done?.toJSON('done') ?? null,
     };
   }
 
-  public override resolved(): ResolvedInfo {
-    // it this is acting as another type, the whole needs to be considered
-    // as a unique type; as in the same TypeSome acting once as itself
-    // (eg resolving a function) and once as some TypeTable needs to occupy
-    // two **different** spots in the cache of marked types, because it does
-    // **not** resolved to the same ResolvedInfo
-    const cacheKey = this.outself.toString() + this.acts?.type.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-
-    if (!this.acts) {
-      info.type = this.outself;
-      return BaseType.marked(info);
-    }
-    if (!this.done) {
-      if (this === this.acts.type.itself) {
-        info.type = this.outself;
-        return BaseType.mark(info, cacheKey);
-      } else {
-        const it = this.acts.type.itself.resolved();
-        info.type = it.type;
-        info.doc = it.doc;
-        it.type.marked = false; // XXX: TypeSome acting as itself
-        return BaseType.mark(info, cacheKey);
-      }
-    }
-
-    const what = this.done;
-    let to: ResolvedInfo;
-    if (this === this.acts.type.itself) {
-      info.type = this.outself;
-      to = BaseType.mark(info, cacheKey); // probably can end the session too early
-    } else {
-      const it = this.acts.type.itself.resolved();
-      info.type = it.type;
-      info.doc = it.doc;
-      it.type.marked = false; // XXX: TypeSome acting as itself
-      to = BaseType.mark(info, cacheKey); // probably can end the session too early
-    }
-
-    return what.resolve(to); // should have nothing done after a .mark that can recurse into a .resolved
+  public override resolved(): VarInfo {
+    log.event(this.toJSON());
+    // const to = this.acts?.type.resolved() ?? { type: Type.make(TypeSome, this.scope, this.from) };
+    const to = this.acts?.type.resolved()
+      ?? this.scope.variables[this.from]
+      ?? { type: Type.make(TypeSome, this.scope, this.from) };
+    const r = this.done?.apply(to) ?? to;
+    log.event(r.type.toJSON());
+    return r;
   }
+
+  // public override resolved(): ResolvedInfo {
+  //   // it this is acting as another type, the whole needs to be considered
+  //   // as a unique type; as in the same TypeSome acting once as itself
+  //   // (eg resolving a function) and once as some TypeTable needs to occupy
+  //   // two **different** spots in the cache of marked types, because it does
+  //   // **not** resolved to the same ResolvedInfo
+  //   const cacheKey = this.outself.toString() + this.acts?.type.toString();
+  //   const info = BaseType.marking({}, cacheKey);
+  //   if (info.type) return BaseType.marked(info);
+
+  //   if (!this.acts) {
+  //     info.type = this.outself;
+  //     return BaseType.marked(info);
+  //   }
+  //   if (!this.done) {
+  //     if (this === this.acts.type) {
+  //       info.type = this.outself;
+  //       return BaseType.mark(info, cacheKey);
+  //     } else {
+  //       const it = this.acts.type.resolved();
+  //       info.type = it.type;
+  //       info.doc = it.doc;
+  //       it.type.marked = false; // XXX: TypeSome acting as itself
+  //       return BaseType.mark(info, cacheKey);
+  //     }
+  //   }
+
+  //   const what = this.done;
+  //   let to: ResolvedInfo;
+  //   if (this === this.acts.type) {
+  //     info.type = this.outself;
+  //     to = BaseType.mark(info, cacheKey); // probably can end the session too early
+  //   } else {
+  //     const it = this.acts.type.resolved();
+  //     info.type = it.type;
+  //     info.doc = it.doc;
+  //     it.type.marked = false; // XXX: TypeSome acting as itself
+  //     to = BaseType.mark(info, cacheKey); // probably can end the session too early
+  //   }
+
+  //   return what.resolve(to); // should have nothing done after a .mark that can recurse into a .resolved
+  // }
 
   public override metaOps: Partial<MetaOpsType> = {
     __index(self, key) {
-      const asSome = self.type.as(TypeSome)!;
-      return asSome.getApplied(new TypeSomeOp.__index(key));
+      assert(self.type instanceof TypeSome, "not a TypeSome, but a " + self.type.constructor.name);
+      return self.type.getApplied(new TypeSomeOp.__index(key));
     },
     __newindex(self, key, value) {
-      const asSome = self.type.as(TypeSome)!;
-      asSome.setApplied(new TypeSomeOp.__newindex(key, value));
+      assert(self.type instanceof TypeSome, "not a TypeSome, but a " + self.type.constructor.name);
+      self.type.setApplied(new TypeSomeOp.__newindex(key, value));
     },
     __call(self, parameters) {
-      const asSome = self.type.as(TypeSome)!;
-      return asSome.getApplied(new TypeSomeOp.__call(parameters));
+      assert(self.type instanceof TypeSome, "not a TypeSome, but a " + self.type.constructor.name);
+      return self.type.getApplied(new TypeSomeOp.__call(parameters));
     },
   };
 

@@ -6,7 +6,7 @@ import { Location, Range } from './locating';
 import { log } from './logging';
 import { MetaOps } from './operating';
 import { LocateReason, Scoping, VarInfo } from './scoping';
-import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple } from './typing';
+import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple, BaseType } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (node: T) => VarInfo;
@@ -54,11 +54,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       .map(it => this.handle(it));
 
     if (expressions.length) {
-      const mayTupleInfo = this.handle(expressions[expressions.length-1]);
-      const mayTupleType = mayTupleInfo.type.as(TypeTuple);
+      const info = this.handle(expressions[expressions.length-1]);
 
-      if (mayTupleType) r.push(...mayTupleType.getInfos());
-      else r.push(mayTupleInfo);
+      if (info.type instanceof TypeTuple)
+        r.push(...info.type.getInfos());
+      else r.push(info);
     }
 
     return r;
@@ -98,7 +98,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const infos = this.exprListTypes(node.arguments);
 
       const theFunction = this.scope.findContext('Function').theFunction;
-      theFunction.as(TypeFunction)!.setReturns(infos);
+      theFunction.setReturns(infos);
 
       return null!;
     },
@@ -182,7 +182,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         const it = node.parameters[k];
         if ('Identifier' === it.type) {
           parameters.names.push(it.name);
-          parameters.infos.push({ type: Type.make(TypeSome, it.name) });
+          parameters.infos.push({ type: Type.make(TypeSome, this.scope.current, it.name) });
         } else parameters.vararg = { type: Type.make(TypeVararg) };
       }
 
@@ -233,7 +233,6 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       // end
       // b = z()() -- b: { __ctor: (arg: <arg>) -> [] }
       // ```
-
       this.scope.fork(startLocation);
         // TODO: function type might benefit from having ref to its
         // inner scope (especially if trying typing some side-effects of calls)
@@ -246,6 +245,8 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.pushContext(startLocation, 'Function', info.type);
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Function');
+
+        const theScope = this.scope.current;
       this.scope.join(endLocation, false);
 
       if (base) {
@@ -259,11 +260,17 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
+      for (const name in theScope.variables) {
+        const xyz = theScope.variables[name].type;
+        if (xyz instanceof TypeSome)
+          xyz.actsAs(theScope.parent?.variables[name] ?? {type:Type.noType()});
+      }
+
       return base ? null! : info;
     },
     // -> type
     Identifier: node => {
-      const info = this.scope.get(node.name);
+      const info = this.scope.get(node.name); //?? TypeSome(current, name)
       this.scope.locate(Range.fromNode(node), node.name, info, LocateReason.Read);
       return info;
     },
@@ -276,7 +283,6 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     // -> type
     TableConstructorExpression: node => {
       const info = { type: Type.make(TypeTable) };
-      const tableType = info.type.as(TypeTable)!;
       let autoIndex = 0;
 
       node.fields.forEach(it=> {
@@ -285,20 +291,20 @@ export class Handling extends TypedEmitter<HandlingEvents> {
             // NOTE: need to change where says xyzType and its the `itself`
             const keyType = this.handle(it.key).type;
             const valueInfo = this.handle(it.value);
-            tableType.setIndexer(keyType, valueInfo);
+            info.type.setIndexer(keyType, valueInfo);
             // TODO: what about multiple entries with the same keyType?!
           } break;
 
           case 'TableKeyString': {
             const valueInfo = this.handle(it.value);
             this.scope.locate(Range.fromNode(it.key), it.key.name, valueInfo, LocateReason.Write);
-            tableType.setField(it.key.name, valueInfo);
+            info.type.setField(it.key.name, valueInfo);
           } break;
 
           case 'TableValue': {
             // TODO: should deal with table-as-list better
             // (+ this does not differentiate between equivalent number and string keys)
-            tableType.setField(""+ ++autoIndex, this.handle(it.value));
+            info.type.setField(""+ ++autoIndex, this.handle(it.value));
             // also need to handle last TableValue entry ^^
           } break;
         }

@@ -4,14 +4,10 @@ import { BaseType, Type } from './internal';
 export class TypeNil extends BaseType {
 
   public override toString() { return "nil"; }
-  public override toJSON() { return null; }
-
-  public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeNil);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON() {
+    return {
+      type: this.constructor.name,
+    };
   }
 
 }
@@ -19,14 +15,10 @@ export class TypeNil extends BaseType {
 export class TypeBoolean extends BaseType {
 
   public override toString() { return "boolean"; }
-  public override toJSON() { return null; }
-
-  public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeBoolean);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON() {
+    return {
+      type: this.constructor.name,
+    };
   }
 
 }
@@ -34,14 +26,10 @@ export class TypeBoolean extends BaseType {
 export class TypeNumber extends BaseType {
 
   public override toString() { return "number"; }
-  public override toJSON() { return null; }
-
-  public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeNumber);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON() {
+    return {
+      type: this.constructor.name,
+    };
   }
 
   public override metaOps: Partial<MetaOpsType> = {
@@ -55,57 +43,46 @@ export class TypeNumber extends BaseType {
 export class TypeString extends BaseType {
 
   public override toString() { return "string"; }
-  public override toJSON() { return null; }
-
-  public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeString);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON() {
+    return {
+      type: this.constructor.name,
+    };
   }
 
 }
 
 export class TypeLiteralBoolean extends TypeBoolean {
 
-  constructor(outself: Type, protected value: boolean) { super(outself); }
+  constructor(protected value: boolean) { super(); }
 
   public override toString() { return this.value.toString(); }
-  public override toJSON(): any { return this.value; }
-
-  public resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeLiteralBoolean, this.value);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON(): any {
+    return {
+      type: this.constructor.name,
+      value: this.value,
+    };
   }
 
 }
 
 export class TypeLiteralNumber extends TypeNumber {
 
-  constructor(outself: Type, protected value: number) { super(outself); }
+  constructor(protected value: number) { super(); }
 
   public override toString() { return this.value.toString(); }
-  public override toJSON(): any { return this.value; }
-
-  public resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeLiteralNumber, this.value);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON(): any {
+    return {
+      type: this.constructor.name,
+      value: this.value,
+    };
   }
 
   public override metaOps: Partial<MetaOpsType> = {
     __add(left, right) {
-      const mate = right.type.itself;
-      if (mate instanceof TypeLiteralNumber) {
-        const add = left.type.as(TypeLiteralNumber)!.value + mate.value;
-        return { type: Type.make(TypeLiteralNumber, add) };
-      }
+      const l = left.type;
+      const r = right.type;
+      if (l instanceof TypeLiteralNumber && r instanceof TypeLiteralNumber)
+        return { type: Type.make(TypeLiteralNumber, l.value + r.value) };
       return { type: Type.make(TypeNumber) };
     },
   };
@@ -114,17 +91,14 @@ export class TypeLiteralNumber extends TypeNumber {
 
 export class TypeLiteralString extends TypeString {
 
-  constructor(outself: Type, protected value: string) { super(outself); }
+  constructor(protected value: string) { super(); }
 
   public override toString() { return `'${this.value}'`; }
-  public override toJSON(): any { return this.value; }
-
-  public resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-    info.type = Type.make(TypeLiteralString, this.value);
-    return BaseType.mark(info, cacheKey);
+  public override toJSON(): any {
+    return {
+      type: this.constructor.name,
+      value: this.value,
+    };
   }
 
 }

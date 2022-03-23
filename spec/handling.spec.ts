@@ -57,7 +57,7 @@ describe("handling", () => {
     const message = messageWhat
       ? `expected ${messageWhat} to be an instance of ${constructor.name}`
       : `expected an instance of ${constructor.name}`;
-    expect(info.type.itself).to.be.instanceOf(constructor, message);
+    expect(info.type).to.be.instanceOf(constructor, message);
   }
 
   function expectLength(array: any[], length: number, typeDesc?: string) {

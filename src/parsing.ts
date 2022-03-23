@@ -118,7 +118,7 @@ export class Parser {
 
         case "{": { // table
           type = Type.make(TypeTable);
-          const asTable = type.itself as TypeTable;
+          const asTable = type as TypeTable;
 
           do { // while ","
 
@@ -199,7 +199,7 @@ export class Parser {
             // <name> ":" <type> | "..." [":" <tuple>] | <type>
             mayType = this.parse(true);
             this.next();
-            asAlias = mayType.as(TypeAlias);
+            asAlias = mayType instanceof TypeAlias ? mayType : undefined;
           }
 
           const value = this.token.value;
@@ -233,7 +233,8 @@ export class Parser {
 
                   if (":" === this.token.value) {
                     this.next();
-                    const shouldTuple = this.parse(true).as(TypeTuple);
+                    const mayTuple = this.parse(true);
+                    const shouldTuple = mayTuple instanceof TypeTuple ? mayTuple : undefined;
                     if (!shouldTuple) this.expected(["<tuple>"]); // YYY (eg. alias to <tuple>)
                     this.next();
 
@@ -295,10 +296,10 @@ export class Parser {
               this.next();
               const retType = this.parse(true);
 
-              const asTupleInfos = retType.as(TypeTuple)?.getInfos();
+              const asTupleInfos = retType instanceof TypeTuple ? retType.getInfos() : undefined;
 
-              type = Type.make(TypeFunction, signatures[0]);
-              type.as(TypeFunction)!.setReturns(asTupleInfos ?? [{ type: retType }]);
+              const asFunction = type = Type.make(TypeFunction, signatures[0]);
+              asFunction.setReturns(asTupleInfos ?? [{ type: retType }]);
             }
 
             // "~*"
@@ -321,7 +322,7 @@ export class Parser {
 
           const asString = `${this.token.value}`;
           type = this.typeof[asString]
-            ?? (this.typeof[asString] = Type.make(TypeSome, asString));
+            ?? (this.typeof[asString] = Type.make(TypeSome, null!, asString)); // XXX
           this.next();
 
           this.expect(">");

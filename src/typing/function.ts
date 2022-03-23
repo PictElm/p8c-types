@@ -1,5 +1,8 @@
+import assert from 'assert';
+import { log } from '../logging';
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
+import { toPOJO } from './base';
 import { BaseType, Type, TypeSome } from './internal';
 import { TypeTuple } from './tuple';
 
@@ -7,9 +10,9 @@ export class TypeFunction extends BaseType {
 
   protected returns: VarInfo = { type: Type.make(TypeTuple, []) };
 
-  public constructor(outself: Type,
+  public constructor(
     protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
-  ) { super(outself); }
+  ) { super(); }
 
   /** get the parameters info */
   public getParameters() {
@@ -32,21 +35,24 @@ export class TypeFunction extends BaseType {
    * 
    * @param applying info for the parameters of the (Lua) function
    */
-  public getReturns(applying?: VarInfo[]): VarInfo {
-    if (!applying) return this.returns;
+  public getReturns(applying: VarInfo[]): VarInfo {
+    //if (!applying) return this.returns;
 
-    const toRevert: TypeSome[] = [];
+    const toRevert: [TypeSome, VarInfo|undefined][] = [];
+
+    // TODO/IDK: cheat the parameter of the function
+    // under the key of this function?
 
     this.parameters.infos.forEach((info, k) => {
-      if (info.type.itself instanceof TypeSome) {
-        toRevert.push(info.type.itself);
-        info.type.itself.actsAs(applying[k]);
+      if (info.type instanceof TypeSome) {
+        toRevert.push([info.type, info.type.acts]);
+        info.type.actsAs(applying[k]);
       }
     });
 
-    const r = this.returns.type.itself.resolved();
+    const r = this.returns.type.resolved();
 
-    toRevert.forEach(type => type.revert());
+    toRevert.forEach(([type, info]) => type.actsAs(info!));
 
     return r;
   }
@@ -54,28 +60,28 @@ export class TypeFunction extends BaseType {
   /** when set do not compute (there is a circular reference somewhere) */
   private loopProtection: boolean = false;
   public override toString() {
-    if (this.loopProtection) return "*" + this.outself.toString(); // YYY: _id
+    if (this.loopProtection) return "*" + this._id; // YYY: _id
     this.loopProtection = true;
 
     const parameters = this.parameters
       .names
-      .map((name, k) => `${name}: ${this.parameters.infos[k].type.itself}`)
+      .map((name, k) => `${name}: ${this.parameters.infos[k].type}`)
       .join(", ");
 
     const toRevert: TypeSome[] = [];
 
     this.parameters.infos.forEach(info => {
-      if (info.type.itself instanceof TypeSome) {
-        toRevert.push(info.type.itself);
-        info.type.itself.actsAs(info);
+      if (info.type instanceof TypeSome) {
+        toRevert.push(info.type);
+        info.type.actsAs(info);
       }
     });
 
-    const returns = `${this.returns.type.itself}`;
+    const returns = `${this.returns.type}`;
     // const asTuple = this.returns.type.as(TypeTuple);
     // const returns = asTuple
     //   ? `${asTuple}`
-    //   : `[${this.returns.type.itself}]`; // YYY: keep the "[]"?
+    //   : `[${this.returns.type}]`; // YYY: keep the "[]"?
 
     toRevert.forEach(type => type.revert());
 
@@ -86,6 +92,7 @@ export class TypeFunction extends BaseType {
 
   public override toJSON(): unknown {
     return {
+      type: this.constructor.name,
       parameters: {
         names: this.parameters.names,
         types: this.parameters.infos.map((it, k) => it.type.toJSON(this.parameters.names[k])),
@@ -95,23 +102,18 @@ export class TypeFunction extends BaseType {
   }
 
   public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
+    this.parameters.infos = this.parameters.infos.map(it => it.type.resolved());
 
-    info.type = Type.make(TypeFunction, this.parameters);
-    const functionType = info.type.as(TypeFunction)!;
+    // const asTupleInfos = this.returns.type.as(TypeTuple)?.getInfos();
+    this.setReturns([this.returns.type.resolved()]);
 
-    const asTupleInfos = this.returns.type.as(TypeTuple)?.getInfos();
-    functionType.setReturns(asTupleInfos ?? [this.returns.type.itself.resolved()]);
-
-    return BaseType.mark(info, cacheKey);
+    return { type: this };
   }
 
   public override metaOps: Partial<MetaOpsType> = {
     __call(self, parameters) {
-      const asFunction = self.type.as(TypeFunction)!;
-      return asFunction.getReturns(parameters);
+      assert(self.type instanceof TypeFunction, "not a TypeFunction, but a " + self.type.constructor.name);
+      return self.type.getReturns(parameters);
     },
   };
 

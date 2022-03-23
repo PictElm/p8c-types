@@ -6,11 +6,11 @@ export class TypeThread extends TypeFunction {
   private created: boolean = false; // YYY when set create, no longer extends TypeFunction..?!
   private signatures: TypeFunction['parameters'][];
 
-  public constructor(outself: Type,
+  public constructor(
     parameters: TypeFunction['parameters'],
     ...following: TypeFunction['parameters'][]
   ) {
-    super(outself, parameters);
+    super(parameters);
     this.signatures = following;
   }
 
@@ -21,13 +21,14 @@ export class TypeThread extends TypeFunction {
   public getNextSignature(): TypeThread {
     const parameters = this.signatures[0] ?? this.parameters;
     const rest = this.signatures.slice(1);
-    return Type.make(TypeThread, parameters, ...rest).itself as TypeThread;
+    return Type.make(TypeThread, parameters, ...rest) as TypeThread;
   }
 
   public override toString() { return "thread"; }
 
   public override toJSON() {
     return {
+      type: this.constructor.name,
       signatures: [this.parameters, ...this.signatures].map(parameters => ({
         parameters: {
           names: parameters.names,
@@ -38,13 +39,8 @@ export class TypeThread extends TypeFunction {
   }
 
   public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-
-    info.type = Type.make(TypeThread, this.signatures[0], ...this.signatures.slice(1)); // XXX: absolutely not
-
-    return BaseType.mark(info, cacheKey);
+    throw "not implemented: resolving a TypeThread";
+    return { type: this };
   }
 
 }

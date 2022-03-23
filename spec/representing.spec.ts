@@ -9,11 +9,11 @@ describe("representing", () => {
   describe("represents primitives", () => {
 
     it("does", () => {
-      expectString(Type.make(TypeNil).itself).to.equal("nil");
-      expectString(Type.make(TypeBoolean).itself).to.equal("boolean");
-      expectString(Type.make(TypeNumber).itself).to.equal("number");
-      expectString(Type.make(TypeString).itself).to.equal("string");
-      // expectString(Type.make(TypeThread).itself).to.equal("thread");
+      expectString(Type.make(TypeNil)).to.equal("nil");
+      expectString(Type.make(TypeBoolean)).to.equal("boolean");
+      expectString(Type.make(TypeNumber)).to.equal("number");
+      expectString(Type.make(TypeString)).to.equal("string");
+      // expectString(Type.make(TypeThread)).to.equal("thread");
     });
 
   });
@@ -21,7 +21,7 @@ describe("representing", () => {
   describe("represents tables", () => {
 
     it("tables", () => {
-      expectString(Type.make(TypeTable).itself).to.equal("{}");
+      expectString(Type.make(TypeTable)).to.equal("{}");
 
       const a = Type.make(TypeTable).as(TypeTable)!;
       a.setField("key", { type: Type.make(TypeBoolean) })
@@ -33,12 +33,12 @@ describe("representing", () => {
   describe("represents functions", () => {
 
     it("simple", () => {
-      expectString(Type.make(TypeFunction, { names: [], infos: [], vararg: null }).itself).to.equal("() -> []");
+      expectString(Type.make(TypeFunction, { names: [], infos: [], vararg: null })).to.equal("() -> []");
     });
 
     it("parameter - (1)", () => {
       const params = { names: ["p"], infos: [{ type: Type.make(TypeSome, "p") }], vararg: null };
-      expectString(Type.make(TypeFunction, params).itself).to.equal("(p: <p>) -> []");
+      expectString(Type.make(TypeFunction, params)).to.equal("(p: <p>) -> []");
     });
 
     it("return - (1)", () => {

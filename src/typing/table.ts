@@ -1,3 +1,4 @@
+import assert from 'assert';
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
 import { BaseType, Type } from './internal';
@@ -35,16 +36,16 @@ export class TypeTable extends BaseType {
   /** when set do not compute (there is a circular reference somewhere) */
   private loopProtection: boolean = false;
   public override toString() {
-    if (this.loopProtection) return "*" + this.outself.toString(); // YYY: _id
+    if (this.loopProtection) return "*" + this._id;
     this.loopProtection = true;
 
     const r: string[] = [];
 
     for (const key in this.fields)
-      r.push(`${key}: ${this.fields[key].type.itself}`);
+      r.push(`${key}: ${this.fields[key].type}`);
 
     this.indexers.forEach(([indexer, info]) =>
-      r.push(`[${indexer}]: ${info.type.itself}`)
+      r.push(`[${indexer}]: ${info.type}`)
     );
 
     this.loopProtection = false;
@@ -53,6 +54,7 @@ export class TypeTable extends BaseType {
 
   public override toJSON() {
     return {
+      type: this.constructor.name,
       fields: Object
         .fromEntries(Object
           .entries(this.fields)
@@ -60,42 +62,35 @@ export class TypeTable extends BaseType {
         ),
       indexers: this.indexers.map(([indexer, info]) => {
         const repr = indexer.toString();
-        return [repr, info.type.itself.toJSON(repr)];
+        return [repr, info.type.toJSON(repr)];
       }),
     };
   }
 
   public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-
-    info.type = Type.make(TypeTable);
-    const tableType = info.type.as(TypeTable)!;
-
     for (const key in this.fields)
-      tableType.setField(key, this.fields[key].type.itself.resolved());
+      this.setField(key, this.fields[key].type.resolved());
 
     this.indexers.forEach(([indexer, info]) =>
-      tableType.setIndexer(indexer, info.type.itself.resolved()) // YYY: indexer.resolved()?
+      this.setIndexer(indexer.resolved().type, info.type.resolved())
     );
 
-    return BaseType.mark(info, cacheKey);
+    return { type: this };
   }
 
   // XXX/TODO: table metatable (yes, that exists)
   public override metaOps: Partial<MetaOpsType> = {
     __index(self, key) {
-      const asTable = self.type.as(TypeTable)!;
+      assert(self.type instanceof TypeTable, "not a TypeTable, but a " + self.type.constructor.name);
       if ('string' === typeof key || 'number' === typeof key)
-        return asTable.getField(`${key}`);
-      return asTable.getIndexer(key.type)[1];
+        return self.type.getField(`${key}`);
+      return self.type.getIndexer(key.type)[1];
     },
     __newindex(self, key, value) {
-      const asTable = self.type.as(TypeTable)!;
+      assert(self.type instanceof TypeTable, "not a TypeTable, but a " + self.type.constructor.name);
       if ('string' === typeof key || 'number' === typeof key)
-        asTable.setField(`${key}`, value);
-      else asTable.setIndexer(key.type, value);
+        self.type.setField(`${key}`, value);
+      else self.type.setIndexer(key.type, value);
     },
   };
 

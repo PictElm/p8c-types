@@ -3,9 +3,7 @@ import { BaseType, Type } from './internal';
 
 export class TypeTuple extends BaseType {
 
-  public constructor(outself: Type,
-    protected /*readonly*/ infos: VarInfo[]
-  ) { super(outself); }
+  public constructor(protected /*readonly*/ infos: VarInfo[]) { super(); }
 
   public getInfos() {
     return this.infos;
@@ -21,31 +19,26 @@ export class TypeTuple extends BaseType {
     // in particular its return type is simply an empty tuple...
     // note that is also affects the .resolved, but here circularity is
     // already handled (with the marking mechanism)
-    return `[${this.infos.map(it => it.type.itself).join(", ")}]`;
+    return `[${this.infos.map(it => it.type).join(", ")}]`;
   }
 
   public override toJSON() {
-    return this.infos.map((it, k) => it.type.toJSON(k.toString()));
+    return {
+      type: this.constructor.name,
+      infos: this.infos.map((it, k) => it.type.toJSON(k.toString()))
+    };
   }
 
   public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-
-    info.type = Type.make(TypeTuple, []);
-    const asTuple = info.type.as(TypeTuple)!;
-
-    asTuple.infos = this.infos.map(it => it.type.itself.resolved());
-
-    return BaseType.mark(info, cacheKey);
+    this.infos = this.infos.map(it => it.type.resolved())
+    return { type: this };
   }
 
 }
 
 export class TypeVararg extends TypeTuple {
 
-  public constructor(outself: Type, infos?: VarInfo[]) { super(outself, infos ?? []); } // XXX: vararg from eg. alias
+  public constructor(infos?: VarInfo[]) { super(infos ?? []); } // XXX: vararg from eg. alias
 
   public override toString() {
     return this.infos.length
@@ -53,17 +46,9 @@ export class TypeVararg extends TypeTuple {
       : "...";
   }
 
-  public override resolved() {
-    const cacheKey = this.outself.toString();
-    const info = BaseType.marking({}, cacheKey);
-    if (info.type) return BaseType.marked(info);
-
-    info.type = Type.make(TypeVararg, []);
-    const asTuple = info.type.as(TypeVararg)!;
-
-    asTuple.infos = this.infos.map(it => it.type.itself.resolved());
-
-    return BaseType.mark(info, cacheKey);
-  }
+  // public override resolved() {
+  //   this.infos = this.infos.map(it => it.type.resolved())
+  //   return { type: this };
+  // }
 
 }

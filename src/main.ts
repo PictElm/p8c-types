@@ -20,20 +20,23 @@ function indentation() {
 }
 
 function main(args: string[]) {
-  // log.level = 'none';
+  log.level = 'none';
 
   const src = `
-function z()
-  local function some(self)
-    return self
-  end
-  local function ctor(arg)
-    local it = { __ctor=ctor }
-    ___(some(it))
-  end
-  return ctor
+a = {}
+function b()
+  return a
 end
-b = z()()
+c = b()
+`; `
+a = {} -- a: {}
+function b()
+  a.b = b -- a.b: <b>
+  return a.d
+end -- b: () -> <a>(.b: <b>).d
+c = b() -- c: nil
+a.d = 0 -- a.d: number
+d = b() -- d: number
 `; `
 function z(proto)
   local function ctor(arg)
@@ -113,8 +116,8 @@ b = a, b
     ;
 
   documenting
-    //.on('type', (range, type) => log.event(`${range.start}: @type ${1 === type.length ? type[0] : `[${type.map(it => it.itself).join(", ")}]`}`))
-    //.on('alias', (range, alias, type) => log.event(`${range.start}: @alias ${alias} = ${type.itself}`))
+    //.on('type', (range, type) => log.event(`${range.start}: @type ${1 === type.length ? type[0] : `[${type.map(it => it).join(", ")}]`}`))
+    //.on('alias', (range, alias, type) => log.event(`${range.start}: @alias ${alias} = ${type}`))
     //.on('documentation', (range, text) => log.event(`${range.start}: arbitrary documentation "${text}"`))
     ;
 
@@ -128,10 +131,11 @@ b = a, b
 main(process.argv.slice(2));
 
 function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) {
-  if (LocateReason.Write !== why) return;
-  log.event([
+  //if (LocateReason.Write !== why) return;
+  log.event(`{${LocateReason[why].padEnd(5, " ")}} ${name}: ${info.type}`);
+  /*log.info([
     `${range.start}: {${LocateReason[why]}}`,
-    `\t${name}: ${info.type.itself}`,
+    `\t${name}: ${info.type}`,
     `\t> ${info.doc?.description
         .toString()
         .replace("\r", "")
@@ -139,5 +143,5 @@ function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) 
         .join(`\n${indentation()}\t> `)
       ?? "* nothing *"
     }`,
-  ].join(`\n${indentation()}`));
+  ].join(`\n${indentation()}`));*/
 }
