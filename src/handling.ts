@@ -5,8 +5,8 @@ import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
 import { MetaOps } from './operating';
-import { LocateReason, Scope, ScopeStrategy, Scoping, VarInfo } from './scoping';
-import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple, BaseType } from './typing';
+import { LocateReason, ScopeStrategy, Scoping, VarInfo } from './scoping';
+import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
 type Handler<T> = (node: T) => VarInfo;
@@ -71,7 +71,13 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     if ('Identifier' === base.type && "___" === base.name) {
       log.info(`___ found at ${Location.fromNodeStart(base)}`);
       if ('CallExpression' === expr.type && expr.arguments.length) {
-        expr.arguments.forEach(it => log.info(this.handle(it)));
+        expr.arguments.forEach(it => {
+          const info = this.handle(it);
+          log.info({
+            type: info.type.toJSON(),
+            doc: info.doc,
+          });
+        });
       } else if ('StringCallExpression' === expr.type) {
         if ('StringLiteral' === expr.argument.type) {
           if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
@@ -156,7 +162,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
           const mayTableInfo = this.handle(it.base);
           this.scope.locate(Range.fromNode(it.identifier), it.identifier.name, initInfo, LocateReason.Write);
 
-          // XXX: again, assuming '.' === it.indexer
+          // XXX: again, assuming '.' === it.indexer (but it cannot be a ':' here, right?)
           MetaOps.__newindex(mayTableInfo, it.identifier.name, initInfo);
         }
       });
@@ -190,24 +196,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
-      // the base needs to be partially processed before
-      // the function's scope itself, as the name of the function
-      // should be defined and typed appropriately
-      // (and this is where the circular refs really begin)
-      // ```
-      // function a() return a end
-      // ```
-      let mayTableInfo: VarInfo | undefined;
       const base = node.identifier;
-      if (base) {
-        if ('Identifier' === base.type) {
-          this.scope.set(base.name, info); // XXX: locality gap
-        } else { // MemberExpression
-          mayTableInfo = this.handle(base.base);
-          // XXX: more of the '.' === it.indexer
-          MetaOps.__newindex(mayTableInfo, base.identifier.name, info);
-        }
-      }
 
       this.scope.fork(startLocation, ScopeStrategy.UPVALUE);
         parameters.names.forEach((name, k) => {
@@ -223,8 +212,10 @@ export class Handling extends TypedEmitter<HandlingEvents> {
 
       if (base) {
         if ('Identifier' === base.type) {
+          this.scope.set(base.name, info);
           this.scope.locate(Range.fromNode(base), base.name, info, LocateReason.Write);
         } else { // MemberExpression
+          const mayTableInfo = this.handle(base.base);
           this.scope.locate(Range.fromNode(base.identifier), base.identifier.name, info, LocateReason.Write);
           assert(mayTableInfo, "FunctionDeclaration: node.base should have been handled, resulting in a VarInfo");
           // XXX: more of the '.' === it.indexer

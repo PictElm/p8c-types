@@ -29,7 +29,13 @@ export class Scope {
   }
 
   public get(name: string): VarInfo {
-    return this.variables[name] ?? { type: Type.make(TypeSome, this.parent, name) };
+    if (ScopeStrategy.UPVALUE === this.strategy) {
+      if (this.hasLocal(name)) return this.variables[name];
+      return this.variables[name] = { type: Type.make(TypeSome, this.parent, name) }
+    }
+
+    if (this.has(name)) return this.variables[name];
+    return this.variables[name] = { type: Type.make(TypeSome, this.parent, name) };
   }
 
   public getLocal(name: string): VarInfo {

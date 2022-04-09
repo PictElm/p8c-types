@@ -20,25 +20,16 @@ function indentation() {
 }
 
 function main(args: string[]) {
-  log.level = 'none';
+  //log.level = 'none';
 
   const src = `
-function b()
-  a.z = false
-  return a
-end
-a = {}
-c = b()
-a.z = 0
-c = b()
-a = { z={ w="" } }
-c = b()
-`; `
 a = {} -- a: {}
 function b()
   a.b = b -- a.b: <b>
   return a.d
 end -- b: () -> <a>(.b: <b>).d
+___(b)
+___(a)
 c = b() -- c: nil
 a.d = 0 -- a.d: number
 d = b() -- d: number

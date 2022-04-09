@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { log } from '../logging';
 import { MetaOpsType } from '../operating';
 import { Scope, VarInfo } from '../scoping';
 import { TypeFunction } from './function';
