@@ -2,7 +2,6 @@ import assert from 'assert';
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Metadata } from './documenting';
 import { Location, Range } from './locating';
-//import { log } from './logging';
 import { Type, TypeFunction, TypeSome, TypeTable, TypeUnion } from './typing';
 
 /** describes a variable within a scope */
@@ -18,53 +17,42 @@ export class Scope {
   private static _lastId = 0;
   protected readonly _id = ++Scope._lastId;
 
-  public readonly variables: Record<string, VarInfo>;
+  private readonly variables: Record<string, VarInfo>;
   private range = Range.emptyRange();
 
-  private constructor(public parent?: Scope) {
+  private constructor(public parent: Scope|undefined, private strategy: ScopeStrategy) {
     this.variables = Object.create(parent?.variables ?? null);
-    for (const name in this.variables)
-      this.variables[name] = { type: Type.make(TypeSome, this, name) };
   }
 
-  /**
-   * @todo TODO: this will be removed soon
-   * 
-   * thining about it:
-   *  - when a variable from a parent scope is edited,
-   *    changes are already done to the right object
-   *  - when a variable is edited for the local scope,
-   *    it will never need to be "merged" with parent scopes'
-   *  - when a global variable is edited, the changes are
-   *    applied to the global scope (setGlobale/getGlobal)
-   * 
-   * the new approach will be to have a `scope.updateStrategy`
-   * of sort that will handle editing a variable's info
-   *  - the scope of a 'DoStatement' can simply set a type
-   *  - an 'IfStatement' may want to update type to be an union
-   * 
-   * (this may require an additional parameter to set/get, idk)
-   */
-  public mergeInfo(from: Scope, override: boolean) {
-    for (const name in from.variables) {
-      const old = this.variables[name];
-      const niw = from.variables[name];
-      //log.info(`[parent -> local] name: ${name} (${old?.type ?? "(not present)"} -> ${niw.type})`);
+  public set(name: string, info: VarInfo) {
+    this.variables[name] = info;
+  }
 
-      // if variable is not local
-      if (old && !Object.is(niw, old)) {
-        if (override) old.type = niw.type;
-        else old.type = Type.make(TypeUnion, old.type, niw.type);
+  public get(name: string): VarInfo {
+    return this.variables[name] ?? { type: Type.make(TypeSome, this.parent, name) };
+  }
 
-        // XXX: if a global variable is _defined_ within the child scope,
-        // it should (if override not set) have a type `nil | <xyz>`
-        // (as every name are implicitely typed `nil` in global scope...)
-        // probably this could be done in the handling of the assignment
-        // itself, but this would block typing side effects of function calls
+  public getLocal(name: string): VarInfo {
+    return Object.prototype.hasOwnProperty.call(this.variables, name)
+      ? this.variables[name]
+      : { type: Type.make(TypeSome, this.parent, name) };
+  }
 
-        if (niw.doc) old.doc = niw.doc;
-      }
-    }
+  public has(name: string): boolean {
+    return !!this.variables[name];
+  }
+
+  public hasLocal(name: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.variables, name);
+  }
+
+  public all() {
+    const r: [string, VarInfo][] = [];
+
+    for (const key in this.variables)
+      r.push([key, this.variables[key]]);
+
+    return r;
   }
 
   public open(start: Location) { this.range = new Range(start, this.range.end); }
@@ -78,8 +66,8 @@ export class Scope {
    * 
    * (this also simulates closures, for anywhen function side-effect are attempt of implemented in)
    */
-  public static makeFrom(parent: Scope) {
-    return new Scope(parent);
+  public static makeFrom(parent: Scope, strategy: ScopeStrategy) {
+    return new Scope(parent, strategy);
   }
 
   /**
@@ -90,12 +78,17 @@ export class Scope {
    * as being the Chunk's scope... maybe not
    */
   public static makeGlobal() {
-    const r = new Scope();
+    const r = new Scope(undefined, ScopeStrategy.INHERIT);
     r.open(Location.beginning());
     r.close(Location.ending());
     return r;
   }
 
+}
+
+export enum ScopeStrategy {
+  INHERIT,
+  UPVALUE,
 }
 
 /* ignore next? */
@@ -176,8 +169,8 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   private readonly contexts: { [T in ContextKind]?: ContextType<T>[] } = {};
 
   /** opens a new local scope inheriting from the current scope */
-  public fork(location: Location) {
-    this.local = Scope.makeFrom(this.local);
+  public fork(location: Location, strategy: ScopeStrategy) {
+    this.local = Scope.makeFrom(this.local, strategy);
     this.local.open(location);
 
     this.emit('fork', location, this.local);
@@ -185,10 +178,9 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
   }
 
   /** closes the current local scope and reverts to its parent */
-  public join(location: Location, merge: boolean, overrideTypes?: boolean) {
+  public join(location: Location) {
     assert(this.local.parent, "Scoping.join: trying to one too many scope");
     this.emit('join', location, this.local);
-    if (merge) this.local.parent.mergeInfo(this.local, !!overrideTypes);
 
     this.local.close(location);
     this.local = this.local.parent;
@@ -236,12 +228,12 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
 
   public set(name: string, variable: VarInfo) {
     //log.info(`[local scope]: setting "${name}: ${variable.type}"`);
-    this.local.variables[name] = variable;
+    this.local.set(name, variable);
   }
 
   public get(name: string) {
     //log.info(`[local scope]: getting "${name}"`);
-    return this.local.variables[name] ?? { type: Type.noType() };
+    return this.local.get(name);
   }
 
   /* istanbul ignore next */
@@ -251,12 +243,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
    * warning: the entries returned should probably be regarded as immutable
    */
   public getGlobals() {
-    const r: Record<string, VarInfo> = {};
-
-    for (const key in this.global.variables)
-      if (!r[key]) r[key] = this.global.variables[key];
-
-    return r;
+    return Object.fromEntries(this.global.all());
   }
 
   /* istanbul ignore next */
@@ -266,12 +253,7 @@ export class Scoping extends TypedEmitter<ScopingEvents> {
    * warning: the entries returned should probably be regarded as immutable
    */
   public getLocals() {
-    const r: Record<string, VarInfo> = {};
-
-    for (const key in this.local.variables)
-      if (!r[key]) r[key] = this.local.variables[key];
-
-    return r;
+    return Object.fromEntries(this.local.all());
   }
 
 }

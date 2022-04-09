@@ -5,7 +5,7 @@ import { Documenting } from './documenting';
 import { Location, Range } from './locating';
 import { log } from './logging';
 import { MetaOps } from './operating';
-import { LocateReason, Scoping, VarInfo } from './scoping';
+import { LocateReason, Scope, ScopeStrategy, Scoping, VarInfo } from './scoping';
 import { Type, TypeFunction, TypeTable, TypeSome, TypeString, TypeBoolean, TypeNil, TypeNumber, TypeVararg, TypeTuple, BaseType } from './typing';
 
 type FindByTType<Union, TType> = Union extends { type: TType } ? Union : never;
@@ -107,14 +107,14 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
-      this.scope.fork(startLocation);
+      this.scope.fork(startLocation, ScopeStrategy.INHERIT);
         // NODE: same as repeat, the contition is in the same scope
         // here, its just kept outside of the context for.. reasons
         const infoCondition = this.handle(node.condition);
         this.scope.pushContext(startLocation, 'While');
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'While');
-      this.scope.join(endLocation, true, false);
+      this.scope.join(endLocation);
 
       return null!;
     },
@@ -122,11 +122,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
-      this.scope.fork(startLocation);
+      this.scope.fork(startLocation, ScopeStrategy.INHERIT);
         this.scope.pushContext(startLocation, 'Do');
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Do');
-      this.scope.join(endLocation, true, true);
+      this.scope.join(endLocation);
 
       return null!;
     },
@@ -209,33 +209,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
-      // TODO: try to "cheat" this.outself into the cached marked types
-      // so that if further down the tree one tries to resolve this very
-      // type, and its returns are not yet known, 
-      // 
-      // this is to face such:
-      // ```
-      // function z()
-      //   local function some(self)
-      //     return self
-      //   end
-      //   local function ctor(arg)
-      //     local it = { __ctor=ctor }
-      //     -- problem is here, it tries to resolve everything,
-      //     -- but the type of ctor (rather it.__ctor) resolves
-      //     -- to `(arg: <arg>) -> []` because incomplete
-      //     return some(it)
-      //     -- if the actual type of ctor was cached as the resolved
-      //     -- one for it, it would have the correct typing (but this
-      //     -- creates more potentially unwanted messy ref links)
-      //   end
-      //   return ctor
-      // end
-      // b = z()() -- b: { __ctor: (arg: <arg>) -> [] }
-      // ```
-      this.scope.fork(startLocation);
-        // TODO: function type might benefit from having ref to its
-        // inner scope (especially if trying typing some side-effects of calls)
+      this.scope.fork(startLocation, ScopeStrategy.UPVALUE);
         parameters.names.forEach((name, k) => {
           const info = parameters.infos[k];
           this.scope.set(name, info);
@@ -245,9 +219,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         this.scope.pushContext(startLocation, 'Function', info.type);
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Function');
-
-        const theScope = this.scope.current;
-      this.scope.join(endLocation, false);
+      this.scope.join(endLocation);
 
       if (base) {
         if ('Identifier' === base.type) {
@@ -260,17 +232,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
         }
       }
 
-      for (const name in theScope.variables) {
-        const xyz = theScope.variables[name].type;
-        if (xyz instanceof TypeSome)
-          xyz.actsAs(theScope.parent?.variables[name] ?? {type:Type.noType()});
-      }
-
       return base ? null! : info;
     },
     // -> type
     Identifier: node => {
-      const info = this.scope.get(node.name); //?? TypeSome(current, name)
+      const info = this.scope.get(node.name);
       this.scope.locate(Range.fromNode(node), node.name, info, LocateReason.Read);
       return info;
     },
@@ -365,11 +331,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
       const startLocation = Location.fromNodeStart(node);
       const endLocation = Location.fromNodeEnd(node);
 
-      this.scope.fork(startLocation);
+      this.scope.fork(startLocation, ScopeStrategy.INHERIT);
         this.scope.pushContext(startLocation, 'Do');
           node.body.forEach(it => this.handle(it));
         this.scope.popContext(endLocation, 'Do');
-      this.scope.join(endLocation, false);
+      this.scope.join(endLocation);
 
       return null!;
     },

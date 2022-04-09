@@ -1,5 +1,5 @@
 import { TypeFunction } from './function';
-import { BaseType, Type } from './internal';
+import { Type } from './internal';
 
 export class TypeThread extends TypeFunction {
 

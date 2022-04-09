@@ -23,10 +23,15 @@ function main(args: string[]) {
   log.level = 'none';
 
   const src = `
-a = {}
 function b()
+  a.z = false
   return a
 end
+a = {}
+c = b()
+a.z = 0
+c = b()
+a = { z={ w="" } }
 c = b()
 `; `
 a = {} -- a: {}
@@ -108,8 +113,8 @@ b = a, b
   const handling = new Handling(scoping, documenting);
 
   scoping
-    //.on('fork', loc => log.event(`${"\t".repeat(scopeIndentation++)}{ new scope from: ${loc}`))
-    //.on('join', loc => log.event(`${"\t".repeat(--scopeIndentation)}} end of a scope: ${loc}`))
+    .on('fork', loc => scopeIndentation++)//log.event(`${"\t".repeat(scopeIndentation++)}{ new scope from: ${loc}`))
+    .on('join', loc => --scopeIndentation)//log.event(`${"\t".repeat(--scopeIndentation)}} end of a scope: ${loc}`))
     //.on('pushContext', (loc, ctx) => log.event(`new context '${ctx}': ${loc}`))
     //.on('popContext', (loc, ctx) => log.event(`end context '${ctx}': ${loc}`))
     .on('locate', onLocate)
@@ -132,7 +137,7 @@ main(process.argv.slice(2));
 
 function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) {
   //if (LocateReason.Write !== why) return;
-  log.event(`{${LocateReason[why].padEnd(5, " ")}} ${name}: ${info.type}`);
+  log.event(`${indentation()}{${LocateReason[why].padEnd(5, " ")}} ${name}: ${info.type}`);
   /*log.info([
     `${range.start}: {${LocateReason[why]}}`,
     `\t${name}: ${info.type}`,

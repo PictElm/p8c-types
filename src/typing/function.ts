@@ -1,10 +1,7 @@
 import assert from 'assert';
-import { log } from '../logging';
 import { MetaOpsType } from '../operating';
 import { VarInfo } from '../scoping';
-import { toPOJO } from './base';
-import { BaseType, Type, TypeSome } from './internal';
-import { TypeTuple } from './tuple';
+import { BaseType, Type, TypeSome, TypeTuple } from './internal';
 
 export class TypeFunction extends BaseType {
 
@@ -36,8 +33,6 @@ export class TypeFunction extends BaseType {
    * @param applying info for the parameters of the (Lua) function
    */
   public getReturns(applying: VarInfo[]): VarInfo {
-    //if (!applying) return this.returns;
-
     const toRevert: [TypeSome, VarInfo|undefined][] = [];
 
     // TODO/IDK: cheat the parameter of the function
@@ -78,10 +73,6 @@ export class TypeFunction extends BaseType {
     });
 
     const returns = `${this.returns.type}`;
-    // const asTuple = this.returns.type.as(TypeTuple);
-    // const returns = asTuple
-    //   ? `${asTuple}`
-    //   : `[${this.returns.type}]`; // YYY: keep the "[]"?
 
     toRevert.forEach(type => type.revert());
 
@@ -104,7 +95,6 @@ export class TypeFunction extends BaseType {
   public override resolved() {
     this.parameters.infos = this.parameters.infos.map(it => it.type.resolved());
 
-    // const asTupleInfos = this.returns.type.as(TypeTuple)?.getInfos();
     this.setReturns([this.returns.type.resolved()]);
 
     return { type: this };

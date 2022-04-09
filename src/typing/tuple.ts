@@ -1,5 +1,5 @@
 import { VarInfo } from '../scoping';
-import { BaseType, Type } from './internal';
+import { BaseType } from './internal';
 
 export class TypeTuple extends BaseType {
 

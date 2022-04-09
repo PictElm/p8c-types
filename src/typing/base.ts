@@ -40,8 +40,6 @@ export abstract class BaseType {
 
 export type Type = BaseType;
 
-// type OmitFirst<A extends unknown[]> = A extends [unknown, ...infer T] ? T : never;
-
 export namespace Type {
 
   // XXX: tsc should warn when it encouters on of these... anyhow, this was to
@@ -59,49 +57,6 @@ export namespace Type {
   export function noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
 
 }
-
-// /**
-//  * this is the class to use to create a typing information
-//  * 
-//  * it also acts as a wrapper around this typing information (which is
-//  * accessible with `itself` and `as`) this is to add a layer of indirection
-//  * (allows mutating a type in-place and keep every references valide)
-//  */
-// export class Type {
-
-//   private static _lastId = 0;
-//   protected readonly _id = ++Type._lastId;
-
-//   // private _itself: BaseType = null!; // is set with mutate right away (see Type.make)
-//   // public get itself() { return this._itself; }
-
-//   private constructor() { }
-
-//   // /** checks if the type itself is instance of given parameter, if not returns `undefined` */
-//   // public as<Z extends new (...args: any[]) => BaseType>(ctor: Z) { return this._itself instanceof ctor ? this._itself as InstanceType<Z> : undefined; }
-//   // /** mutates the type itself to be the new given type (remark: not sure this will be used anymore though...) */
-//   // public mutate<T extends BaseType>(into: T) { return this._itself = into; }
-
-//   /**
-//    * @todo YYY: is used (a lot) when resolving and caching types, but truth is it just
-//    * needed a way to identify types (ideally as string or number);
-//    * _id or equivalent should probably be exposed properly for this exact use case
-//    * this would be the same with Scope and Metadata (why not a decorator?)
-//    */
-//   public toString() { return `Type@_id${this._id}`; }
-//   // public toJSON(key: string) { const name = this.constructor.name; return { [name]: this.toJSON(name) } };
-//   // public toJSON(key: string) { const name = this.constructor.name; return { [name]: this.toJSON(name) } };
-
-//   public static make<Z extends new (...args: [...ConstructorParameters<Z>]) => BaseType>(ctor: Z, ...args: ConstructorParameters<Z>) {
-//     // const r = new Type();
-//     // r.mutate(new ctor(r, ...args));
-//     // return r;
-//     return new ctor(...args);
-//   }
-
-//   public static noType(/* details / reasons / ..? */) { return Type.make(TypeNil); }
-
-// }
 
 //#region union & intersection
 

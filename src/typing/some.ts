@@ -16,7 +16,7 @@ import { TypeTable } from './table';
  * @todo TODO: same as Handling.handlers, would like it refactored
  * so it can easily be augmented/adapted for new kinds of usages
  */
-abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
+export abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
 
   public args: T;
   private next?: TypeSomeOp;
@@ -193,7 +193,7 @@ export class TypeSome extends BaseType {
   private done?: TypeSomeOp;
 
   public constructor(
-    private scope: Scope,
+    protected scope: Scope,
     private from: string,
   ) { super(); }
 
@@ -216,28 +216,19 @@ export class TypeSome extends BaseType {
   }
 
   public actsAs(type: VarInfo) {
-    // somehow works more or less for now... TypeSome.resolved makes for messy ref links though
-    //assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
+    assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
     this.acts = type;
   }
   public revert() {
-    // somehow works more or less for now... TypeSome.resolved makes for messy ref links though
-    //assert(this.acts, "TypeSome.revert: not acting as anything");
+    assert(this.acts, "TypeSome.revert: not acting as anything");
     this.acts = undefined;
   }
 
   public override toString(): string {
-    /*if (!this.acts) return `<${this.from ?? "?"}>`;
-    if (!this.done) return this === this.acts.type
-        ? `<${this.from ?? "?"}>`
-        : `${this.acts.type}`;
-
-    const what = this.done;
-    const to = this === this.acts.type
-      ? `<${this.from ?? "?"}>`
-      : `${this.acts.type}`;*/
-
-    const to = `<${this.from ?? "?"}>`;
+    const to = this.acts?.type.toString()
+      ?? this.scope.has(this.from)
+        ? this.scope.get(this.from).type.toString()
+        : `<${this.from ?? "?"}>`;
     return this.done?.represent(to) ?? to;
   }
 
@@ -253,58 +244,11 @@ export class TypeSome extends BaseType {
   }
 
   public override resolved(): VarInfo {
-    log.event(this.toJSON());
-    // const to = this.acts?.type.resolved() ?? { type: Type.make(TypeSome, this.scope, this.from) };
     const to = this.acts?.type.resolved()
-      ?? this.scope.variables[this.from]
-      ?? { type: Type.make(TypeSome, this.scope, this.from) };
+      ?? this.scope.get(this.from);
     const r = this.done?.apply(to) ?? to;
-    log.event(r.type.toJSON());
     return r;
   }
-
-  // public override resolved(): ResolvedInfo {
-  //   // it this is acting as another type, the whole needs to be considered
-  //   // as a unique type; as in the same TypeSome acting once as itself
-  //   // (eg resolving a function) and once as some TypeTable needs to occupy
-  //   // two **different** spots in the cache of marked types, because it does
-  //   // **not** resolved to the same ResolvedInfo
-  //   const cacheKey = this.outself.toString() + this.acts?.type.toString();
-  //   const info = BaseType.marking({}, cacheKey);
-  //   if (info.type) return BaseType.marked(info);
-
-  //   if (!this.acts) {
-  //     info.type = this.outself;
-  //     return BaseType.marked(info);
-  //   }
-  //   if (!this.done) {
-  //     if (this === this.acts.type) {
-  //       info.type = this.outself;
-  //       return BaseType.mark(info, cacheKey);
-  //     } else {
-  //       const it = this.acts.type.resolved();
-  //       info.type = it.type;
-  //       info.doc = it.doc;
-  //       it.type.marked = false; // XXX: TypeSome acting as itself
-  //       return BaseType.mark(info, cacheKey);
-  //     }
-  //   }
-
-  //   const what = this.done;
-  //   let to: ResolvedInfo;
-  //   if (this === this.acts.type) {
-  //     info.type = this.outself;
-  //     to = BaseType.mark(info, cacheKey); // probably can end the session too early
-  //   } else {
-  //     const it = this.acts.type.resolved();
-  //     info.type = it.type;
-  //     info.doc = it.doc;
-  //     it.type.marked = false; // XXX: TypeSome acting as itself
-  //     to = BaseType.mark(info, cacheKey); // probably can end the session too early
-  //   }
-
-  //   return what.resolve(to); // should have nothing done after a .mark that can recurse into a .resolved
-  // }
 
   public override metaOps: Partial<MetaOpsType> = {
     __index(self, key) {
