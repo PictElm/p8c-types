@@ -65,7 +65,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
   }
 
   /* istanbul ignore next */
-  private ___debugHelper(node: ast.CallStatement) {
+  private ___debugHelper(node: ast.CallStatement): boolean | never {
     const expr = node.expression;
     const base = expr.base;
     if ('Identifier' === base.type && "___" === base.name) {
@@ -78,6 +78,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
             doc: info.doc,
           });
         });
+        return true;
       } else if ('StringCallExpression' === expr.type) {
         if ('StringLiteral' === expr.argument.type) {
           if ('throw' === expr.argument.value) throw "___'throw' at " + Location.fromNodeStart(base);
@@ -87,9 +88,11 @@ export class Handling extends TypedEmitter<HandlingEvents> {
             : 'locals' === expr.argument.value
               ? this.scope.getLocals()
               : expr.argument.value);
+          return true;
         }
       }
     }
+    return false;
   }
 
   // TODO: would like to make it possible to insert your own handlers,
@@ -171,7 +174,7 @@ export class Handling extends TypedEmitter<HandlingEvents> {
     },
     AssignmentOperatorStatement: node => null!,
     CallStatement: node => {
-      this.___debugHelper(node);
+      if (this.___debugHelper(node)) return null!;
 
       this.handle(node.expression);
 

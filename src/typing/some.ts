@@ -33,9 +33,11 @@ export abstract class TypeSomeOp<T extends unknown[] = unknown[]> {
         ? it.toJSON(this.constructor.name)
         : 'function' === typeof it.type?.toJSON
           ? it.type.toJSON(this.constructor.name)
-          : 'object' != typeof it
-            ? it
-            : null),
+          : Array.isArray(it)
+            ? JSON.parse(JSON.stringify(it))
+            : 'object' != typeof it
+              ? it
+              : null),
     }
   };
 
@@ -215,19 +217,19 @@ export class TypeSome extends BaseType {
   }
 
   public actsAs(type: VarInfo) {
-    assert(!this.acts, "TypeSome.as: already acts as " + this.acts);
+    assert(!this.acts, `TypeSome.as: <${this.from}> already acts as ` + JSON.stringify(this.acts?.type.toJSON(), null, 2));
     this.acts = type;
   }
   public revert() {
-    assert(this.acts, "TypeSome.revert: not acting as anything");
+    assert(this.acts, `TypeSome.revert: <${this.from}> not acting as anything`);
     this.acts = undefined;
   }
 
   public override toString(): string {
     const to = this.acts?.type.toString()
-      ?? this.scope.has(this.from)
+      ?? /*this.scope.has(this.from)
         ? this.scope.get(this.from).type.toString()
-        : `<${this.from ?? "?"}>`;
+        : */`<${this.from ?? "?"}>`;
     return this.done?.represent(to) ?? to;
   }
 
@@ -243,8 +245,13 @@ export class TypeSome extends BaseType {
   }
 
   public override resolved(): VarInfo {
-    const to = this.acts?.type.resolved()
-      ?? this.scope.get(this.from);
+    let to = this.acts?.type.resolved();
+    if (!to) {
+      if (this.scope.has(this.from))
+        to = this.scope.get(this.from).type.resolved();
+      else
+        to = { type: this };
+    }
     const r = this.done?.apply(to) ?? to;
     return r;
   }

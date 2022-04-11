@@ -5,7 +5,7 @@ import { BaseType, Type, TypeSome, TypeTuple } from './internal';
 
 export class TypeFunction extends BaseType {
 
-  protected returns: VarInfo = { type: Type.make(TypeTuple, []) };
+  protected returns: VarInfo = { type: Type.noType() }; //{ type: Type.make(TypeTuple, []) };
 
   public constructor(
     protected parameters: { names: string[], infos: VarInfo[], vararg: VarInfo | null }
@@ -33,21 +33,24 @@ export class TypeFunction extends BaseType {
    * @param applying info for the parameters of the (Lua) function
    */
   public getReturns(applying: VarInfo[]): VarInfo {
-    const toRevert: [TypeSome, VarInfo|undefined][] = [];
+    const toRevert: TypeSome[] = [];
+    // const toRevert: [TypeSome, VarInfo|undefined][] = [];
 
     // TODO/IDK: cheat the parameter of the function
     // under the key of this function?
 
     this.parameters.infos.forEach((info, k) => {
       if (info.type instanceof TypeSome) {
-        toRevert.push([info.type, info.type.acts]);
+        toRevert.push(info.type);
+        // toRevert.push([info.type, info.type.acts]);
         info.type.actsAs(applying[k]);
       }
     });
 
     const r = this.returns.type.resolved();
 
-    toRevert.forEach(([type, info]) => type.actsAs(info!));
+    toRevert.forEach(type => type.revert());
+    // toRevert.forEach(([type, info]) => type.actsAs(info!));
 
     return r;
   }
@@ -65,12 +68,12 @@ export class TypeFunction extends BaseType {
 
     const toRevert: TypeSome[] = [];
 
-    this.parameters.infos.forEach(info => {
-      if (info.type instanceof TypeSome) {
-        toRevert.push(info.type);
-        info.type.actsAs(info);
-      }
-    });
+    // this.parameters.infos.forEach(info => {
+    //   if (info.type instanceof TypeSome) {
+    //     toRevert.push(info.type);
+    //     info.type.actsAs(info);
+    //   }
+    // });
 
     const returns = `${this.returns.type}`;
 
@@ -93,10 +96,14 @@ export class TypeFunction extends BaseType {
   }
 
   public override resolved() {
-    this.parameters.infos = this.parameters.infos.map(it => it.type.resolved());
+    if (this.loopProtection) return { type: this };
+    this.loopProtection = true;
+
+    // this.parameters.infos = this.parameters.infos.map(it => it.type.resolved());
 
     this.setReturns([this.returns.type.resolved()]);
 
+    this.loopProtection = false;
     return { type: this };
   }
 

@@ -23,17 +23,6 @@ function main(args: string[]) {
   //log.level = 'none';
 
   const src = `
-a = {} -- a: {}
-function b()
-  a.b = b -- a.b: <b>
-  return a.d
-end -- b: () -> <a>(.b: <b>).d
-___(b)
-___(a)
-c = b() -- c: nil
-a.d = 0 -- a.d: number
-d = b() -- d: number
-`; `
 function z(proto)
   local function ctor(arg)
     local it = { __ctor=ctor }
@@ -50,7 +39,7 @@ Potato = z {
 }
 
 p = Potato(42)
-q = p.__ctor
+___(p.color)
 `; `
 function class(classname)
   return function(proto)
@@ -128,7 +117,7 @@ main(process.argv.slice(2));
 
 function onLocate(range: Range, name: string, info: VarInfo, why: LocateReason) {
   //if (LocateReason.Write !== why) return;
-  log.event(`${indentation()}{${LocateReason[why].padEnd(5, " ")}} ${name}: ${info.type}`);
+  log.event(`${range.start.toString(true)}${indentation()}{${LocateReason[why].padEnd(5, " ")}} ${name}: ${info.type}`);
   /*log.info([
     `${range.start}: {${LocateReason[why]}}`,
     `\t${name}: ${info.type}`,
